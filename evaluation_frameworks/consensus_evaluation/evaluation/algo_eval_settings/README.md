@@ -1,0 +1,2 @@
+# Specific settings for algorithsm
+
