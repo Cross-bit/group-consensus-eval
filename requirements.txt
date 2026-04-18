@@ -3,7 +3,7 @@ joblib==1.5.3
 kneed==0.8.6
 lightfm @ git+https://github.com/lyst/lightfm.git
 matplotlib==3.10.8
-numpy==2.4.4
+numpy==1.26.4
 overrides==7.7.0
 pandas==3.0.2
 Requests==2.33.1

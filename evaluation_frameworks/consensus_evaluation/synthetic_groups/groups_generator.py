@@ -1,34 +1,42 @@
+"""
+`synthetic_groups.groups_generator` — synthetic user triplets for consensus evaluation.
+
+Builds **groups of user IDs** (typically size 3) used as evaluation scenarios: similar
+users in embedding space, outliers, random controls, and specialised variants
+(divergent / high rating-variance on common items). The core class is
+``GroupGenerator``:
+
+- normalises user embeddings and precomputes **FAISS** nearest neighbours (cosine
+  via inner product on L2-normalised vectors),
+- estimates global similarity percentiles ``ts`` / ``to`` to classify "similar" vs
+  "dissimilar" pairs,
+- optionally intersects candidate groups with **sparse rating overlap** filters
+  (minimum common rated items).
+
+Helper functions train or load a **LightFM** model on the MovieLens CSR matrix,
+cache **precision@k** probes, and derive user embedding dicts — all via
+``load_or_build_pickle`` so long offline steps are reproducible.
+
+The ``if __name__ == "__main__"`` block at the bottom is an **offline batch driver**
+(ml-32m): it materialises large pickle caches for similar / outlier / random groups
+and filtered variants; it is not used when the package is imported by evaluators.
+"""
+
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from multiprocessing import Pool, cpu_count
 from overrides import override
 from tqdm import tqdm
-import datetime
-import os
 import random
-from time import time
 import faiss
 from typing import Dict, List, Optional, Set, Tuple
 import numpy as np
-import pandas as pd
 from lightfm import LightFM
-from lightfm.evaluation import precision_at_k, recall_at_k
-from sklearn.neighbors import NearestNeighbors
-from surprise import SVD, Dataset, Reader
+from lightfm.evaluation import precision_at_k
 from scipy.sparse import csr_matrix
-from sklearn.metrics.pairwise import cosine_similarity
 from dataset.data_access import MovieLensDatasetLoader
-from utils.config import load_or_build_pickle, CACHE_FILES_DIR
+from utils.config import load_or_build_pickle
 
-import pickle
-
-# ===================================
-# DESCRIPTION
-# ===================================
-# Contains generator for the evaluation groups.
-#
-
-# === CONFIGURATION FLAGS ===
+# Toggles for the ``__main__`` batch job (dataset / cache artefacts).
 LOAD_SPARSE_MATRIX = True
 LOAD_SURPRISE_TRAINSET = True
 LOAD_EMBEDDINGS_FROM_PICKLE = True
@@ -68,14 +76,14 @@ def evaluate_precision_light_fm_cached(model, csr_matrix, *, k=10, cache_name=No
 
 def create_user_embeddings_lightfm(model: LightFM, user_id_map: Dict = None) -> Dict[int, np.ndarray]:
     """
-    Extract user embeddings from LightFM model.
+    Extract user embeddings from a trained LightFM model.
 
     Args:
-        model (LightFM): Trénovaný model
-        user_id_map (dict): Optional, index → userId (pokud chceš původní ID)
+        model: Trained LightFM instance.
+        user_id_map: Optional internal index → external user id mapping.
 
     Returns:
-        dict: {user_id: embedding_vector}
+        Mapping ``{user_id: embedding_vector}``.
     """
     n_users = model.user_embeddings.shape[0]
     user_embeddings = {}
@@ -102,10 +110,10 @@ class GroupGenerator:
         self.id_to_index = {uid: idx for idx, uid in enumerate(self.user_ids)}
         self.index_to_id = {idx: uid for idx, uid in enumerate(self.user_ids)}
 
-        # Embedding matice jako float32 a normalizace
+        # Embedding matrix as float32 + L2 row normalisation (unit vectors for cosine IP).
         self.embeddings = np.array([user_embeddings[uid] for uid in self.user_ids], dtype=np.float32)
         norms = np.linalg.norm(self.embeddings, axis=1, keepdims=True) + 1e-10
-        self.embeddings = self.embeddings / norms  # normalizace na jednotkové vektory
+        self.embeddings = self.embeddings / norms
 
         # CACHE
         faiss_cache_name = f"faiss-nn-{len(self.user_ids)}users-{max_neighbors}.pkl"
@@ -113,7 +121,7 @@ class GroupGenerator:
 
         def build_faiss_neighbors():
             print("⚙️  Fitting FAISS index...")
-            index = faiss.IndexFlatIP(self.embeddings.shape[1])  # inner product = cosine pro normované vektory
+            index = faiss.IndexFlatIP(self.embeddings.shape[1])  # IP == cosine similarity on L2-normalised rows
             index.add(self.embeddings)
             distances, indices = index.search(self.embeddings, max_neighbors)
             return distances, indices
@@ -818,106 +826,3 @@ if __name__ == "__main__":
     print(f"similar {len(similar_groups_filtered)}")
     print(f"outlier {len(outlier_groups_filtered)}")
     print(f"random {len(random_groups_filtered)}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-##### Useful but not used:
-
-# (too expensive we compute it dynamically using KNN)
-#def compute_similarity_matrix(user_embeddings_dict):
-#
-#
-#    """
-#    Vstup: slovník {user_id: np.array(embedding)}
-#    Výstup: tuple (similarity_matrix, user_id_list)
-#        - similarity_matrix: 2D numpy pole (n_users x n_users)
-#        - user_id_list: seznam user_id ve stejném pořadí jako řádky/sloupce matice
-#    """
-#    user_ids = list(user_embeddings_dict.keys())
-#    embedding_matrix = np.array([user_embeddings_dict[uid] for uid in user_ids])
-#
-#    similarity_matrix = cosine_similarity(embedding_matrix)
-#
-#    return similarity_matrix, user_ids
-#
-#def compute_similarity_matrix(user_embeddings_dict: Dict[int, np.ndarray]) -> pd.DataFrame:
-#    """Compute cosine similarity matrix from user embeddings.
-#
-#    Args:
-#        user_embeddings_dict (Dict[int, np.ndarray]): Dictionary mapping user IDs to their embedding vectors.
-#
-#    Returns:
-#        Tuple[np.ndarray, List[int]]:
-#            - similarity_matrix (np.ndarray): 2D array of cosine similarities between users.
-#            - user_id_list (List[int]): List of user IDs in the same order as rows/columns of the matrix.
-#    """
-#    user_ids = list(user_embeddings_dict.keys())
-#    embedding_matrix = np.array([user_embeddings_dict[uid] for uid in user_ids])
-#
-#    similarity_matrix = cosine_similarity(embedding_matrix)
-#
-#    similarity_df = pd.DataFrame(similarity_matrix, index=user_ids, columns=user_ids)
-#
-#    return similarity_df
-
-
-
-#def csr_2_surprise_df(sparse_mx: csr_matrix, user_id_map: Dict, movie_id_map: Dict) -> pd.DataFrame:
-#    """
-#    Convert sparse user-item matrix to long-form DataFrame usable with Surprise.
-#
-#    Args:
-#        sparse_mx (csr_matrix): Sparse user-item ratings
-#        user_id_map (dict): Mapping index → userId
-#        movie_id_map (dict): Mapping index → movieId
-#
-#    Returns:
-#        pd.DataFrame: DataFrame with columns ['userId', 'itemId', 'rating']
-#    """
-#
-#    print("Computing Surprise representation ... ")
-#
-#    sparse_mx = sparse_mx.tocoo()  # Convert to coordinate format
-#
-#    df = pd.DataFrame({
-#        'userId': [user_id_map[i] for i in sparse_mx.row],
-#        'itemId': [movie_id_map[j] for j in sparse_mx.col],
-#        'rating': sparse_mx.data
-#    })
-#
-#    return df
-
-
-# Set data preparation
-#def ratings_mx_2_surprise_df(ratings_mx_df: pd.DataFrame) -> pd.DataFrame:
-#    # find the long format
-#    ratings_long_df = ratings_mx_df.stack().reset_index()
-#    ratings_long_df.columns = ['userId', 'itemId', 'rating']
-#
-#    reader = Reader(rating_scale=(ratings_long_df.rating.min(), ratings_long_df.rating.max()))
-#    ratings_surprise = Dataset.load_from_df(ratings_long_df[['userId', 'itemId', 'rating']], reader)
-#    trainset = ratings_surprise.build_full_trainset()
-#
-#    return trainset
-
-
-#def build_surprise_trainset_from_df(surprise_longform_df: pd.DataFrame):
-#    reader = Reader(rating_scale=(
-#        surprise_longform_df.rating.min(),
-#        surprise_longform_df.rating.max()
-#    ))
-#    data = Dataset.load_from_df(surprise_longform_df, reader)
-#    return data.build_full_trainset()

@@ -75,7 +75,7 @@ class EaserSparse(RecAlgoFull):
         if self._ratings_matrix is None:
             raise Exception("No model data found. Call fit() first.")
 
-        # mapování externích ID na interní indexy
+        # Map external IDs to internal row/column indices.
         if user_id not in self._user_id_to_internal_row_index:
             raise ValueError(f"Unknown user_id: {user_id}")
         if item_id not in self._item_id_to_internal_col_index:
@@ -349,13 +349,11 @@ class EaserEvaluation(SurpriseRatingBasedEvaluation):
             predicted_scores = [scores[i] for i in top_k]
 
             hits = set(top_k) & true_inner_iids
-            #set(top_k) & {trainset.to_inner_iid(iid) for iid in true_iids}
 
             # Metrics
             precisions.append(len(hits) / self.k)
             recalls.append(len(hits) / len(true_iids))
             rel = [1 if i in true_inner_iids else 0 for i in top_k]
-            #rel = [1 if i in {trainset.to_inner_iid(iid) for iid in true_iids} else 0 for i in top_k]
             ndcgs.append(ndcg_score([rel], [predicted_scores]))
 
         return {

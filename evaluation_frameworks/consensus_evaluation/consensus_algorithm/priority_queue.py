@@ -1,3 +1,21 @@
+"""
+`priority_queue` — lightweight max-priority queue for mediator redistribution.
+
+This module provides `SimplePriorityQueue`, a small helper used when the async
+consensus mediator needs to order candidate items by a numeric priority and
+pop the best ones first. It is **not** a general-purpose heap library:
+
+- Stores ``(item_id -> priority)`` in a dict and rebuilds a stdlib
+  ``PriorityQueue`` on each change (fine for small ``W`` / small queues).
+- Priorities are **max-first** (highest score pops first) by negating values
+  when pushing into Python's min-heap ``PriorityQueue``.
+- Supports bulk add/update, discard, full priority refresh via a callback, and
+  debug-friendly ``__str__``.
+
+Used by ``RedistributionUnit`` in ``redistribution_unit.py`` to maintain each
+user's pending redistribution queue between rounds.
+"""
+
 from queue import PriorityQueue
 from typing import Dict, Callable, Any, Iterable, List, Tuple
 

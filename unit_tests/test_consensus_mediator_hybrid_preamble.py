@@ -32,9 +32,9 @@ def _install_lightweight_stubs() -> None:
     if "evaluation_frameworks.consensus_evaluation.consensus_mediator" in sys.modules:
         return
 
-    _ensure_parent_chain("evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender")
+    _ensure_parent_chain("evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender_engine")
     rec = types.ModuleType(
-        "evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender"
+        "evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender_engine"
     )
 
     class _B(ABC):
@@ -51,7 +51,7 @@ def _install_lightweight_stubs() -> None:
     )
     rec.RecommendationEngineIndividualEaser = type("RecommendationEngineIndividualEaser", (_B,), {})
     sys.modules[
-        "evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender"
+        "evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender_engine"
     ] = rec
 
     _ensure_parent_chain(

@@ -388,11 +388,7 @@ def prepare_group_eval_data(groups: List[List[int]], ratings_csr: csr_matrix, us
     """
     common_items_dict: Dict[Tuple[int, int, int], Set[int]] = get_group_common_items(groups, ratings_csr, user_id_map)
     print("✅ Found groups common (ground-truth) interactions")
-    #items_to_remove = get_all_common_items(common_items_dict)
     filtered_csr = zero_out_from_dict(ratings_csr, common_items_dict, user_id_map)
-    #print("✅ Aggregated results")
-    #filtered_csr = remove_items_from_csr(ratings_csr, items_to_remove)
-    #print("✅ Removed common interactions from CSR matrix")
     remapped_common = remap_common_items_to_external(common_items_dict, item_id_map)
     print("✅ Remapped common items to external item IDs")
 

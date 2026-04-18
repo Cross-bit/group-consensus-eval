@@ -108,8 +108,8 @@ class GR_AggregatedRecommendations(RecAlgoGroupAggregated):
             return np.median(score_matrix, axis=0)
 
         elif method in ('multiplicative', 'geomean'):
-        # Geometrický průměr — penalizuje nízké hodnoty.
-        # Předpoklad: skóre jsou nezáporná. Epsilon brání log(0).
+        # Geometric mean — penalizes low scores.
+        # Assumes nonnegative scores; epsilon avoids log(0).
             eps = 1e-12
             X = np.clip(score_matrix, eps, None)
             return np.exp(np.mean(np.log(X), axis=0))
@@ -237,17 +237,12 @@ class GR_AggregatedProfilesUpdatable(RecAlgoGroupAggregated):
         reduce: str = "mean",   # "mean" | "sum"
     ) -> None:
 
-        #print("======================================")
-        #print(len(list(user_item_interactions.values())[0]))
-        ##print(user_item_interactions)
-        #print("======================================")
-
         key = self._group_key_from_interactions(user_item_interactions)
         # 1. group key + init profile
         if key not in self._profiles:
             self._profiles[key] = self._aggregate_profiles(list(key), method="mean")
 
-        # zajisti počitadla pro 'mean' i když profil už existoval
+        # Initialise vote counters for 'mean' even when the profile already existed.
         if self._update_mode == "mean" and key not in self._vote_counts:
             self._vote_counts[key] = np.zeros_like(self._profiles[key])
 
@@ -318,7 +313,7 @@ class GR_AggregatedProfilesUpdatable(RecAlgoGroupAggregated):
         masked = np.full(n, -np.inf)
         masked[mask] = scores[mask]
 
-        # rychlé top-k bez full sortu
+        # Fast top-k without sorting the full vector.
         top_idx = np.argpartition(masked, -k)[-k:]
         top_idx = top_idx[np.argsort(masked[top_idx])[::-1]]
 
@@ -332,7 +327,7 @@ class GR_AggregatedProfilesUpdatable(RecAlgoGroupAggregated):
         self._profiles.pop(key, None)
         self._vote_counts.pop(key, None)
 
-    # ---------- interní pomocníci ----------
+    # ---------- internal helpers ----------
     def _group_key(self, user_ids: List[int]) -> Tuple[int, ...]:
         return tuple(sorted(user_ids))
 

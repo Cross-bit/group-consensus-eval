@@ -1,3 +1,30 @@
+"""
+`redistribution_unit` — per-user priority queues and policies for async redistribution.
+
+When the async mediator recommends a mix of **new** items and **re-offered**
+items from earlier rounds, this module decides **which** held-over items enter
+each user's queue and **in what order** they should surface.
+
+Contents:
+
+- ``RedistributionContext`` — minimal read-only interface exposed to priority
+  functions (vote totals, round index, queue sizes).
+- ``PriorityFunction`` / ``SimplePriorityFunction`` / ``MultiplicativePriorityNormalized``
+  — pluggable scoring: combine cached recommender scores with group vote
+  signals to produce a float priority per ``(user_id, item_id)``.
+- ``RedistributionUnit`` — concrete context + state:
+
+  - one ``SimplePriorityQueue`` per user (pending redistribution items),
+  - bookkeeping of all votes and who liked which item (for vote totals),
+  - ``update_voted_items`` to ingest a round of ``Vote`` objects: drop stale
+    items, enqueue newly liked items the user has not seen yet,
+  - ``get_redistributed_items`` to pop up to ``t`` items for the next slate.
+
+Depends on ``RecAlgoCached`` (typically ``EaserCached``) for batched score
+lookups and on ``Vote`` from ``models.py``. Wired from ``consensus_mediator``
+for async policies that use redistribution + threshold splitting.
+"""
+
 from abc import ABC, abstractmethod
 from typing import Dict, List, Set
 
@@ -157,8 +184,6 @@ class RedistributionUnit(RedistributionContext):
 
         # suppose only positive feedback items here
         users_positive_votes_only = self._filter_positive_votes_only(users_votes_all)
-        #print("positive votes: ")
-        #print(users_positive_votes_only)
 
         # aggregate all the items users voted positively in current round
         all_liked_items_ids_in_current_round = {
@@ -193,8 +218,6 @@ class RedistributionUnit(RedistributionContext):
 
             # update user priority queue
             self._enqueue_user_items(user_id, items_to_redistribute_to_user)
-            #print(f"{user_id}, {positive_votes_in_cur_round}")
-            #print(f"{user_id}, {self.items_Queue[user_id]}")
 
 
         self.round_counter += 1

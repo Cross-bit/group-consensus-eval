@@ -2,11 +2,11 @@
 """
 Compatibility shim.
 
-Historically, `SurpriseRatingBasedEvaluation` žila přímo v tomto modulu.
-Teď je skutečná implementace v:
+Historically, `SurpriseRatingBasedEvaluation` lived in this module.
+The real implementation now lives in:
 `evaluation_frameworks.general_recommender_evaluation.evaluation.surprise_rating_eval`.
 
-Tenhle soubor jen re‑exportuje třídu, aby staré importy fungovaly:
+This file only re-exports the class so legacy imports keep working:
 `from evaluation_frameworks.general_recommender_evaluation.evaluation import SurpriseRatingBasedEvaluation`
 """
 

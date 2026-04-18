@@ -1,7 +1,24 @@
+"""
+`groups_testset_splitter` — train / validation / test split for **lists of groups**.
+
+Synthetic evaluation builds a large pool of user triplets (or larger groups), but
+experiments usually need a **disjoint** hold-out: a fixed number of groups for
+validation hyperparameter search and a fixed number for final test metrics, with
+the rest kept for training-style simulation if needed.
+
+``GroupsEvaluationSetsSplitter``:
+
+- shuffles the full group list with a **reproducible RNG seed**,
+- allocates ``val_count`` and ``test_count`` groups in that order from the shuffle,
+- assigns the remainder to the training bucket.
+
+If the pool is smaller than ``val_count + test_count``, counts are **scaled down
+proportionally** so neither split is empty when possible (avoids “test set has 0
+groups” when eval defaults to the test split).
+"""
+
 import random
 from typing import List, Tuple
-# DESCRIPTION
-
 
 
 class GroupsEvaluationSetsSplitter:

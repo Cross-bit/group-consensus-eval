@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.base_experiment import ConsensusExperimentBase
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import autorun
-from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender import (
+from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender_engine import (
     RecommendationEngineGroupAllIndividualEaserUpdatable,
     RecommendationEngineGroupAllSameEaser,
 )

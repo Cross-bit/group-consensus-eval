@@ -1,16 +1,68 @@
+"""
+`consensus_mediator` — round-by-round orchestration for group consensus simulations.
+
+Each **mediator** turns last-round ``Vote`` objects into the next per-user list of
+candidate ``item_id`` values inside a fixed interaction window ``window_size``.
+Implementations differ in how much is **new recommendation** vs **re-offered**
+(redistributed) content, and whether the slate is **shared** across the group.
+
+**Composed pieces**
+
+- **Recommendation engines** (``recommender_engine``): per-user or group engines
+  that wrap underlying recommenders / iterators.
+- **``RedistributionUnit``** (async / hybrid tails): priority queues that recycle
+  positively liked items users have not resolved yet.
+- **``ThresholdPolicy``**: decides how many of the ``window_size`` slots are taken
+  from redistribution vs. fresh recommendation each round (after round 0).
+
+**Threshold policies**
+
+- ``ThresholdPolicyStatic`` — round ``0`` allocates **no** redistribution
+  (``t = 0`` so the full window is fresh items); every later round uses a fixed
+  integer ``t`` (still clamped to the user's redistribution queue length in the
+  mediator).
+- ``ThresholdPolicySigmoid`` — after round ``0``, computes a **continuous** split
+  factor from (a) a shifted logistic in the **round index** and (b) a **queue
+  filling** scaler read from ``RedistributionContext``; multiplies by
+  ``window_size`` and rounds to an integer slot count for redistribution.
+
+**Mediator variants**
+
+- ``ConsensusMediatorAsyncApproach`` — classic **async** split: update queues,
+  draw ``t`` redistributed items, fill remainder with the general recommender.
+- ``ConsensusMediatorSyncApproach`` — **sync**: one group recommendation vector per
+  round, broadcast to every member; no redistribution.
+- ``ConsensusMediatorHybridApproach`` — **hybrid preamble**: first delivers
+  ``first_round_ration`` total **group-sync** items across early rounds (mixed with
+  per-user tail inside each round when ``W`` allows), then enters async-style
+  redistribution + per-user recommendations (uses a separate internal async round
+  counter for the sigmoid policy).
+- ``ConsensusMediatorHybridApproachWithFeedback`` — like hybrid, but the async
+  phase uses an **updatable** per-user engine that can ingest votes via
+  ``update_model``; redistribution bootstraps from votes with unanimous overlap
+  filtered out on first entry.
+
+**Shared helpers**
+
+``check_matches`` / ``clear_item_votes`` support RFC-style diagnostics (unanimous
+positive votes on an item across the whole group).
+"""
+
 from collections import defaultdict
 import random
 import numpy as np
 from typing import List, Dict, Set, Literal
 
 from abc import ABC, abstractmethod
-from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender import GeneralRecommendationEngineBase, GroupRecommendationEngineBase, RecommendationEngineGroupAllIndividualEaserUpdatable, RecommendationEngineGroupAllSameEaser, RecommendationEngineGroupAllSameEaserWithFeedback, RecommendationEngineIndividualEaser
+from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender_engine import GeneralRecommendationEngineBase, GroupRecommendationEngineBase, RecommendationEngineGroupAllIndividualEaserUpdatable, RecommendationEngineGroupAllSameEaser, RecommendationEngineGroupAllSameEaserWithFeedback, RecommendationEngineIndividualEaser
 from evaluation_frameworks.consensus_evaluation.consensus_algorithm.redistribution_unit import RedistributionContext, RedistributionUnit, SimplePriorityFunction
 from evaluation_frameworks.consensus_evaluation.consensus_algorithm.models import Vote
 from evaluation_frameworks.general_recommender_evaluation.algorithms.easer_cached import EaserCached
 from dataset.data_access import MovieLensDatasetLoader
 
 class ThresholdPolicy(ABC):
+    """How many redistribution slots ``t`` to take before filling the rest with new items."""
+
     @abstractmethod
     def get_parameter_value(self, round: int, user_id: int):
         pass
@@ -22,6 +74,7 @@ class ThresholdPolicy(ABC):
         }
 
 class ThresholdPolicyStatic(ThresholdPolicy):
+    """Constant ``t`` after the opening round; ``t = 0`` on round ``0``."""
 
     def __init__(self, t_param: int):
         self.t = t_param
@@ -39,20 +92,25 @@ class ThresholdPolicyStatic(ThresholdPolicy):
         return base
 
 class ThresholdPolicySigmoid(ThresholdPolicy):
+    """Smooth ``t`` schedule: logistic over rounds × queue-fill scaler × ``window_size``."""
 
     def __init__(self, red_context: RedistributionContext, window_size, sigmoid_center = 5, sigmoid_steepness = 1.4, c_init: float = 0.2, max_filling = 10, min_filling=0):
-        """_summary_
-
+        """
         Args:
-            t_param (int): _description_
-            c (float, optional): Initial filling . Defaults to 0.2.
+            red_context: Must expose per-user redistribution queue sizes (``RedistributionUnit``).
+            window_size: Interaction window ``W``; returned ``t`` is capped later by queue length.
+            sigmoid_center: Inflection round for the logistic term.
+            sigmoid_steepness: Logistic slope ``a``.
+            c_init: Lower asymptote ``c`` inside ``(0, 1)`` — minimum fraction of ``W`` devoted
+                to redistribution even at early post-round-0 rounds (before scaling effects).
+            max_filling / min_filling: Bounds passed to the queue-fill scaler (redistribution depth signal).
         """
         self.redistribution_context = red_context
-        self.min_filling = min_filling # typically 0 is a good option
+        self.min_filling = min_filling  # lower bound for queue-fill normalization
         self.max_filling = max_filling
         self.c_init = c_init
         self.steepness = sigmoid_steepness
-        epsilon = 0.015 # the accuracy of the k_{epsilon}
+        epsilon = 0.015  # tolerance used when solving for the transition round offset
         self.sigmoid_center = sigmoid_center
         self.transition_point = self.get_transition_point(sigmoid_center, sigmoid_steepness, c_init, epsilon)
         self.window_size = window_size
@@ -92,6 +150,7 @@ class ThresholdPolicySigmoid(ThresholdPolicy):
         return base
 
 class ConsensusMediatorBase(ABC):
+    """Abstract consensus driver shared by async / sync / hybrid mediators."""
 
     @abstractmethod
     def get_next_round_recommendation(self, previous_round_votes: Dict[int, List[Vote]]) -> Dict[int, List[int]]:
@@ -104,14 +163,10 @@ class ConsensusMediatorBase(ABC):
     @abstractmethod
     def check_matches(self, previous_round_votes: Dict[int, List[Vote]]) -> List[int]:
         pass
-#
-# Implements consensus mediator for the async algorithm from the paper.
-# Composed of
-# a) General recommender -- to generate new group (or individual recommendations)
-# b) Redistribution unit -- to redistribute votes from the previous rounds
-#
+
 
 class ConsensusMediatorAsyncApproach(ConsensusMediatorBase):
+    """Async mediator: per-user window mix of fresh recommendations + redistributed items."""
 
     def __init__(
                 self,
@@ -157,9 +212,9 @@ class ConsensusMediatorAsyncApproach(ConsensusMediatorBase):
 
         for user_id, votes in previous_round_votes.items():
 
-            # 2. Find value of threshold parameter t  make tune_async_with_static_policy_simple_priority_group_rec MODE=compute ; make tune_async_with_static_policy_simple_priority_individual_rec MODE=compute
+            # 2. Threshold t: how many slots come from redistribution (bounded by queue size).
             redistribution_queue_size = self.redistribution_unit.get_user_redistribution_queue_size(user_id)
-            redistributed_part_size = min(self.threshold_policy.get_parameter_value(self.current_round, user_id), redistribution_queue_size) # make sure we can recommend that many items
+            redistributed_part_size = min(self.threshold_policy.get_parameter_value(self.current_round, user_id), redistribution_queue_size)
             redistributed_part_size = int(round(float(redistributed_part_size)))
             new_recommendation_size = self.window_size - redistributed_part_size
 
@@ -170,8 +225,6 @@ class ConsensusMediatorAsyncApproach(ConsensusMediatorBase):
             # 4. Redistribute items from previous rounds
             redistributed_items = self.redistribution_unit.get_redistributed_items(user_id, redistributed_part_size)
             next_round_recs[user_id] = next_round_recs[user_id] + redistributed_items
-
-        #random.shuffle(next_round_recs)
 
         self.current_round += 1
 
@@ -203,6 +256,7 @@ class ConsensusMediatorAsyncApproach(ConsensusMediatorBase):
 
 
 class ConsensusMediatorSyncApproach(ConsensusMediatorBase):
+    """Sync mediator: identical group slate for every member each round; no redistribution."""
 
     def __init__(self, users_ids: List[int], window_size: int, group_recommendation_engine: GroupRecommendationEngineBase):
         self.current_round = 0
@@ -258,6 +312,7 @@ class ConsensusMediatorSyncApproach(ConsensusMediatorBase):
 
 
 class ConsensusMediatorHybridApproach(ConsensusMediatorBase):
+    """Hybrid mediator: optional sync preamble, then async redistribution + per-user fill."""
 
     def __init__(self, users_ids: List[int], general_recommender: GeneralRecommendationEngineBase, group_recommendation_engine: GroupRecommendationEngineBase, redistribution_unit: RedistributionUnit, first_round_ration: int, threshold_policy: ThresholdPolicy, window_size: int):
         self.general_recommender = general_recommender
@@ -354,7 +409,7 @@ class ConsensusMediatorHybridApproach(ConsensusMediatorBase):
         self.current_round += 1
         return next_round_recs
 
-    def _filter_all_same_items_out(sefl, previous_round_votes: Dict[int, List[Vote]]):
+    def _filter_all_same_items_out(self, previous_round_votes: Dict[int, List[Vote]]):
 
         sets = [set(votes) for votes in previous_round_votes.values()]
         common_votes = set.intersection(*sets)
@@ -391,11 +446,9 @@ class ConsensusMediatorHybridApproach(ConsensusMediatorBase):
 
         return matched_items
 
-#
-#
-#
 
 class ConsensusMediatorHybridApproachWithFeedback(ConsensusMediatorBase):
+    """Hybrid mediator with vote-driven updates to the per-user engine in the async phase."""
 
     def __init__(self, users_ids: List[int],
                 updatable_group_recommender: RecommendationEngineGroupAllIndividualEaserUpdatable,
@@ -497,7 +550,7 @@ class ConsensusMediatorHybridApproachWithFeedback(ConsensusMediatorBase):
         self.current_round += 1
         return next_round_recs
 
-    def _filter_only_unique_items(sefl, previous_round_votes: Dict[int, List[Vote]]):
+    def _filter_only_unique_items(self, previous_round_votes: Dict[int, List[Vote]]):
 
         sets = [set(votes) for votes in previous_round_votes.values()]
         common_votes = set.intersection(*sets)

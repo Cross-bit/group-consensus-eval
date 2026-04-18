@@ -1,4 +1,34 @@
-import time
+"""
+`recommender_engine` — consensus recommendation engines used by mediators and evaluation pipelines.
+
+This module contains:
+- abstract interfaces for single-user and group recommendation engines,
+- async engines (individual, group-aggregated, and updatable hybrid variants),
+- sync engines (group-shared recommendations, with and without feedback updates),
+- feedback-to-stars normalization helpers used by updatable pipelines,
+- a commented usage sketch at the bottom (not executed).
+
+An "engine" is an orchestration layer, not the scoring model itself.
+The mediator drives the consensus loop (round progression, thresholds, and
+redistribution), while the engine adapts recommender models to that loop.
+
+In practice, the engine sits between:
+- mediator logic (`consensus_mediator`) and
+- recommender/scoring logic (individual/group recommenders and their iterators).
+
+The engine is responsible for round-local recommendation state, for example:
+- state reset between rounds/groups,
+- exclusion tracking (do not recommend already served items),
+- shared slate semantics (for group scenarios, all members in the same round
+  receive the same generated group slate, instead of each call advancing the
+  iterator independently),
+- feedback updates (convert mediator vote format and apply updates to updatable
+  recommender models when required by the strategy).
+
+This separation keeps recommendation math inside recommender algorithms, while
+consensus-specific orchestration remains reusable and consistent across evals.
+"""
+
 import pandas as pd
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -6,10 +36,10 @@ from typing import List, Dict, Optional, Set
 import numpy as np
 
 from evaluation_frameworks.general_recommender_evaluation.algorithms.algorithm_base import RecAlgoIterator
-from evaluation_frameworks.general_recommender_evaluation.algorithms.group_algorithms.easer_group import GR_AggregatedProfilesUpdatable, GR_AggregatedRecommendations, TopKIterator
+from evaluation_frameworks.general_recommender_evaluation.algorithms.group_algorithms.easer_group import GR_AggregatedProfilesUpdatable, TopKIterator
 from evaluation_frameworks.consensus_evaluation.consensus_algorithm.models import Vote
 from evaluation_frameworks.general_recommender_evaluation.algorithms.group_algorithms.interface import RecAlgoGroupAggregated, RecAlgoUpdatable
-from movies_data.dataset.data_access import MovieLensDatasetLoader
+
 
 class GeneralRecommendationEngineBase(ABC):
 
@@ -175,17 +205,27 @@ class RecommendationEngineGroupAllIndividualEaserUpdatable(GeneralRecommendation
 
     def __init__(self, users_ids: List[int], updatable_group_model: GR_AggregatedProfilesUpdatable):
         self.all_recommended_item_ids = []
+        self._all_recommended_item_ids_set: Set[int] = set()
         self.updatable_group_model: GR_AggregatedProfilesUpdatable = updatable_group_model
         self.current_iterator = None
         self.users_ids = users_ids
 
         self.served_users_in_current_round = 0
+        self._group_sync_slate: Optional[List[int]] = None
         self.reset_iteration(users_ids)
 
         super().__init__()
 
     def get_all_recommended_items(self) -> Set[int]:
         return self.all_recommended_item_ids
+
+    def begin_new_recommendation_round(self) -> None:
+        """
+        Invalidate round-local recommendation cache.
+        Must be called once at start of each mediator round.
+        """
+        self.served_users_in_current_round = 0
+        self._group_sync_slate = None
 
     def reset_iteration(self, users_ids: List[int], exclude_items: Optional[Set[int]] = None, agg_strategy: Optional[str] = 'mean') -> None:
         """
@@ -206,8 +246,13 @@ class RecommendationEngineGroupAllIndividualEaserUpdatable(GeneralRecommendation
 
         if exclude_items:
             self.all_recommended_item_ids = list(exclude_items)
+            self._all_recommended_item_ids_set = set(exclude_items)
+        else:
+            self.all_recommended_item_ids = []
+            self._all_recommended_item_ids_set = set()
 
         self.users_ids = users_ids
+        self.begin_new_recommendation_round()
 
     def update_model(self, last_votes: Dict[int, List[Vote]]):
         if len(last_votes) > 0:
@@ -215,20 +260,28 @@ class RecommendationEngineGroupAllIndividualEaserUpdatable(GeneralRecommendation
             self.updatable_group_model.update_group_with_votes(mapped, reduce="mean")
 
         # make sure we are really tracking all the items
-        all_rec_items_ids_set = set(self.all_recommended_item_ids)
         for votes in last_votes.values():
-            new_ids = {v.id for v in votes if v.id not in all_rec_items_ids_set}
-            self.all_recommended_item_ids.extend(new_ids)
+            for v in votes:
+                if v.id not in self._all_recommended_item_ids_set:
+                    self._all_recommended_item_ids_set.add(v.id)
+                    self.all_recommended_item_ids.append(v.id)
 
     def recommend_next_k(self, user_id: int, size: int, last_votes: List[Vote] = None) -> List[int]:
 
         # UPDATING: we leave the update on the caller using -- update_model -- method
-
-        new_rec = self.updatable_group_model.recommend_group_top_k(self.users_ids, size, exclude=set(self.all_recommended_item_ids))
-        self.all_recommended_item_ids.extend(new_rec)
+        if self._group_sync_slate is None or len(self._group_sync_slate) != size:
+            self._group_sync_slate = self.updatable_group_model.recommend_group_top_k(
+                self.users_ids,
+                size,
+                exclude=self._all_recommended_item_ids_set,
+            )
+            for item_id in self._group_sync_slate:
+                if item_id not in self._all_recommended_item_ids_set:
+                    self._all_recommended_item_ids_set.add(item_id)
+                    self.all_recommended_item_ids.append(item_id)
 
         self.served_users_in_current_round += 1
-        return new_rec
+        return list(self._group_sync_slate)
 
     def normalize_feedback_to_stars(
         self,
@@ -251,7 +304,6 @@ class RecommendationEngineGroupAllIndividualEaserUpdatable(GeneralRecommendation
         """
         midpoint = 0.5 * (star_min + star_max)
         out: Dict[int, Dict[int, float]] = {}
-        # print(user_votes)
         for uid, votes in user_votes.items():
             mapped: Dict[int, float] = {}
             for v in votes:
@@ -383,7 +435,6 @@ class RecommendationEngineGroupAllSameEaserWithFeedback(GroupRecommendationEngin
         """
         midpoint = 0.5 * (star_min + star_max)
         out: Dict[int, Dict[int, float]] = {}
-        # print(user_votes)
         for uid, votes in user_votes.items():
             mapped: Dict[int, float] = {}
             for v in votes:
@@ -401,76 +452,21 @@ class RecommendationEngineGroupAllSameEaserWithFeedback(GroupRecommendationEngin
         return out
 
 
-#    def normalize_feedback_to_stars(
-#        self,
-#        user_item_interactions: Dict[int, Dict[int, float]],
-#        *,
-#        star_min: float = 1.0,
-#        star_max: float = 5.0,
-#        ) -> Dict[int, Dict[int, float]]:
-#            """
-#            Maps {-1,0,1} -> [star_min, star_max].
-#            -1 -> star_min
-#            +1 -> star_max
-#            0 -> midpoint
-#            """
+# --- Usage sketch (commented): same group recommendation for all members ---
+# Not executed when this file is imported. Copy into a script or REPL if needed.
 #
-#            midpoint = 0.5 * (star_min + star_max)
-#            out: Dict[int, Dict[int, float]] = {}
+# from dataset.data_access import MovieLensDatasetLoader
+# from evaluation_frameworks.general_recommender_evaluation.algorithms.group_algorithms.easer_group import (
+#     GR_AggregatedRecommendations,
+# )
 #
-#            for uid, items in user_item_interactions.items():
-#                mapped: Dict[int, float] = {}
-#                for item_id, v in items.items():
-#                    if v > 0:
-#                        mapped[item_id] = float(star_max)
-#                    elif v < 0:
-#                        mapped[item_id] = float(star_min)
-#                    else:
-#                        mapped[item_id] = float(midpoint)
-#
-#                if mapped:  # skip empty
-#                    out[uid] = mapped
-#            return out
-#
-#
+# d_loader = MovieLensDatasetLoader()
+# _, ratings_matrix = d_loader.load_data(True)
+# group_model = GR_AggregatedRecommendations()
+# group_model.fit(ratings_matrix)
+# user_ids = [42, 24, 5, 6]
+# rec_engine = RecommendationEngineGroupAllSameEaser(user_ids, ratings_matrix, group_model)
+# rec_engine.recommend_next_k(42, 5)  # same slate for other members in that round
+# rec_engine.recommend_next_k(24, 5)
+# rec_engine.reset_iteration([42, 24], agg_strategy="median")
 
-
-
-if __name__ == "__main__":
-
-    d_loader = MovieLensDatasetLoader()
-    _, ratings_matrix = d_loader.load_data(True)
-    ratings_matrix_np = ratings_matrix.to_numpy()
-
-    user_ids = [42, 24, 5, 6]
-
-### Individual recommendation test
-
-#    easer_cached = EaserCached()
-#    easer_cached.fit(ratings_matrix)
-#
-#    easer_cached.precalculate_scores(user_ids)
-#    groupRecEaser = RecommendationEngineIndividualEaser(ratings_matrix, easer_cached)
-#
-#    print(groupRecEaser.recommend_next_k(user_ids, 5))
-#    print(groupRecEaser.recommend_next_k(user_ids, 5))
-#    print(groupRecEaser.recommend_next_k(user_ids, 5))
-
-### Same group recommendation for all test
-
-    groupRecEaser = GR_AggregatedRecommendations()
-    groupRecEaser.fit(ratings_matrix)
-
-    user_ids = [42, 24, 5, 6]
-    recEngine = RecommendationEngineGroupAllSameEaser(user_ids, ratings_matrix, groupRecEaser)
-
-    print(recEngine.recommend_next_k(42, 5))
-    print(recEngine.recommend_next_k(24, 5))
-    print(recEngine.recommend_next_k(42, 5))
-    print(recEngine.recommend_next_k(5, 5))
-    print(recEngine.recommend_next_k(6, 5))
-
-    recEngine.reset_iteration([42, 24], agg_strategy = "median")
-
-    #print(recEngine.recommend_next_k(user_ids, 5))
-    #print(recEngine.recommend_next_k(user_ids, 5))

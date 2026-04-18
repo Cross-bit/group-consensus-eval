@@ -1,3 +1,15 @@
+"""
+`generator_tests` — sanity checks for synthetic group lists and related matrices.
+
+Utilities here validate that generated **user groups** (lists of external user
+ids) satisfy structural constraints used downstream: e.g. minimum intersection of
+rated items inside a CSR slice, global uniqueness of group tuples, and optional
+checks against a LightFM model / embeddings for plausibility.
+
+These are **offline QA helpers** (not pytest modules): call them from notebooks or
+batch scripts after ``groups_generator`` materialises new pickle pools.
+"""
+
 from itertools import combinations
 from typing import Dict, List, Set, Tuple
 import numpy as np
@@ -7,17 +19,6 @@ from lightfm.evaluation import precision_at_k, recall_at_k
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
-# ===================================
-# DESCRIPTION
-# ===================================
-# Contains test functions to validate the quality and consistency
-# of user group interaction data.
-#
-#
-
-# ====================================
-# UNIT TEST FUNCTIONS
-# ====================================
 
 def validate_groups_min_interactions_and_uniques(
     groups: List[List[int]],
@@ -247,10 +248,7 @@ def validate_divergent_groups_similarity(
     return valid, len(groups)
 
 
-# ====================================
-# EXECUTIONS WRAPPERS
-# ====================================
-# (wrappers with nice prints)
+# --- CLI-style wrappers (print progress / summaries) ---
 
 
 def validate_groups_min_interactions_run_wrapper(

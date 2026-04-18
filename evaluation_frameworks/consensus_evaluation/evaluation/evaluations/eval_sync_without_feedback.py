@@ -7,7 +7,7 @@ from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.base_expe
     latex_rfc_table_group_types_by_biases,
 )
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import autorun
-from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender import RecommendationEngineGroupAllSameEaser
+from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender_engine import RecommendationEngineGroupAllSameEaser
 from evaluation_frameworks.consensus_evaluation.consensus_mediator import ConsensusMediatorSyncApproach
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.evaluators.consensus_mediator_factories import (
     SyncMediatorFactoryBuilderSync,

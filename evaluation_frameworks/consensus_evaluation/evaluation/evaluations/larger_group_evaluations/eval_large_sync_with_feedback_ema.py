@@ -8,7 +8,7 @@ from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.base_expe
     pick_bias_result_for_table,
 )
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import autorun
-from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender import RecommendationEngineGroupAllSameEaserWithFeedback
+from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender_engine import RecommendationEngineGroupAllSameEaserWithFeedback
 from evaluation_frameworks.consensus_evaluation.consensus_mediator import ConsensusMediatorSyncApproach
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.evaluators.consensus_mediator_factories import (
     SyncMediatorFactoryBuilderSync,

@@ -24,13 +24,49 @@ At a high level:
 
 ## Repository Layout
 
-- `evaluation_frameworks/` — consensus algorithms, evaluators, context factories, print/export scripts
+- `evaluation_frameworks/consensus_evaluation/` — mediators, synthetic groups, evaluation pipeline (see [evaluation_frameworks/consensus_evaluation/README.md](evaluation_frameworks/consensus_evaluation/README.md))
+- `evaluation_frameworks/general_recommender_evaluation/` — standalone MovieLens / Surprise rating experiments (EASEr, SVD, iterators); not wired into `run_consensus.sh`
 - `dataset/` — dataset loading and sparse cache usage for MovieLens pipelines (see `dataset/README.md`)
 - `utils/` — shared config/cache helpers (including `load_or_build_pickle`)
 - `cache/cons_evaluations/` — evaluation outputs used by reporting scripts
 - `run_consensus.sh` — single entry for full/parallel/tune/debug eval (see `./run_consensus.sh help` or `make consensus-help`)
+- `Makefile` — `consensus-*` wrappers around `run_consensus.sh`, plus many per-module `eval_*` / `tune_*` / `table_*` targets
 - `eval_notify.sh` — optional logging hook used by `run_consensus.sh eval-suite`
 - `unit_tests/` — targeted tests for mediator logic
+
+## Makefile and `./run_consensus.sh`
+
+Paper-scale runs are driven by **`./run_consensus.sh`** from the repository root. **`make consensus-*`** targets are thin wrappers that call the same script (they require **`bash`** in `PATH`).
+
+On **Windows**, use **Git Bash**, **MSYS2**, or **WSL** so `./run_consensus.sh` and `make consensus-eval-full` work as written; plain PowerShell does not run the script natively.
+
+| `make` target | Underlying command |
+|---------------|-------------------|
+| `consensus-help` | `./run_consensus.sh help` |
+| `consensus-eval-full` | `./run_consensus.sh eval-full` |
+| `consensus-eval-parallel` | `./run_consensus.sh eval-parallel-seeded` |
+| `consensus-eval-w1w3` | `./run_consensus.sh eval-w1-w3-isolated` |
+| `consensus-tune-hybrid` | `./run_consensus.sh tune-hybrid` |
+| `consensus-eval-phased` | `./run_consensus.sh eval-phased` |
+| `consensus-eval-debug` | `./run_consensus.sh eval-debug-one` |
+| `consensus-eval-suite` | `./run_consensus.sh eval-suite` |
+| `consensus-sync-gcp` | `./run_consensus.sh sync-gcp` |
+
+**Single-module runs** (one algorithm, one window, tuning sweeps, LaTeX table generators) still use **`Makefile`** targets such as `eval_async_static_policy_simple_priority_function_individual_rec`, `tune_hybrid_all_params`, `table_ndcg_comparisions`, and so on. Inspect the exact Python invocation with `make -n <target>`. Common variables: `MODE` (`auto` / `compute` / `load`), `W` (consensus window), `GROUPS_COUNT`, `GROUP_SIZE` (large-group evals), `K` (NDCG tables).
+
+### Paper `eval-full` / `eval-parallel-seeded` module set
+
+These orchestration modes iterate **windows × population biases × group types** and run the same **seven** evaluation modules (see `run_consensus.sh`, arrays `EVAL_MODULES`):
+
+1. **Async + sigmoid, individual recommender** — `eval_async_with_sigmoid_policy_simple_priority_individual_rec`
+2. **Async static policy, individual** — `eval_async_static_policy_simple_priority_function_individual_rec`
+3. **Async static policy, group recommender** — `eval_async_static_policy_simple_priority_function_group_rec`
+4. **Sync, no feedback** — `eval_sync_without_feedback`
+5. **Sync + feedback (EMA)** — `eval_sync_with_feedback_ema`
+6. **Hybrid, general individual recommender** — `eval_hybrid_general_rec_individual`
+7. **Hybrid, updatable** — `eval_hybrid_updatable`
+
+`eval-phased` runs a **smaller module set** at `PHASE1_W`, then the **full seven-module set** at `PHASE2_W` (see `run_consensus.sh`). `eval-suite` runs one pass over the same seven modules with optional `eval_notify.sh` logging. **Larger-group** and **extra** experiments are only via dedicated `Makefile` targets / modules under `evaluation_frameworks/consensus_evaluation/evaluation/evaluations/larger_group_evaluations/` and `.../other_evaluations/`, not the default `eval-full` list.
 
 ## Quick Start
 
@@ -40,6 +76,12 @@ At a high level:
 python3 -m venv venv
 source venv/bin/activate
 python -m pip install -r requirements.txt
+```
+
+After setup, a quick sanity check (stdlib `unittest` only):
+
+```bash
+python -m unittest discover -s unit_tests -p "test_*.py"
 ```
 
 ### 1.1) Dataset note (important)
@@ -80,7 +122,7 @@ Why isolated runs matter:
 5. **Metrics + persistence**
    - results persisted under `cache/cons_evaluations/...`
 6. **Reporting**
-   - export + LaTeX table scripts in `evaluation/evaluations/print/`
+   - export + LaTeX table scripts in `evaluation_frameworks/consensus_evaluation/evaluation/evaluations/print/`
 
 ## Adding a New Evaluation Script
 
@@ -102,7 +144,7 @@ Minimal checklist for compatibility:
 - saves results into the existing `cons_evaluations` layout
 - does not write to globally shared ad-hoc cache paths
 
-## Redistribuční jednotka (Redistribution Unit)
+## Redistribution unit
 
 The redistribution unit is the adaptive block between recommendation candidates and user-visible ordering. It is responsible for:
 
@@ -113,7 +155,7 @@ The redistribution unit is the adaptive block between recommendation candidates 
 Implementation references:
 
 - `evaluation_frameworks/consensus_evaluation/consensus_algorithm/redistribution_unit.py`
-- related mediator orchestration in `consensus_mediator.py`
+- related mediator orchestration in `evaluation_frameworks/consensus_evaluation/consensus_mediator.py`
 
 ## Reproducibility Notes
 
@@ -133,16 +175,6 @@ Implementation references:
 
 - **`ModuleNotFoundError` for dataset modules**  
   Verify the expected `movies_data` paths exist and were synced.
-
-## Useful Scripts
-
-- `./run_consensus.sh eval-full` — baseline sequential full evaluation
-- `./run_consensus.sh eval-parallel-seeded` — seeded, isolated parallel evaluation
-- `./run_consensus.sh eval-w1-w3-isolated` — focused isolated run for `W=1,3`
-- `./run_consensus.sh tune-hybrid` — hyperparameter tuning (H0/H1), not paper eval
-- `./run_consensus.sh sync-gcp` — optional rsync template (override `SYNC_SRC`, `SYNC_REMOTE`, `SYNC_SSH_KEY`)
-
-`make consensus-help` lists Makefile shortcuts.
 
 ## License / Usage
 

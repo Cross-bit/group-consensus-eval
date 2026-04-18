@@ -66,7 +66,6 @@ class SurpriseSVDRecommender(RecAlgoBase):
         return self
 
     def predict(self, user_id: int, item_id: int) -> float:
-        #print(f"In SVD predict: user_id: {user_id}, item id: {item_id}:")
         return self._model.predict(user_id, item_id).est
 
 
@@ -97,7 +96,7 @@ class SVDPrecisionEvaluation(SurpriseRatingBasedEvaluation):
             except ValueError:
                 continue
 
-            # Získáme skóre pro všechny položky
+            # Score all items for this user.
             all_items = set(trainset.all_items())
             known_items = set(j for (j, _) in self.train_matrix[uid_inner].items())
             candidate_items = list(all_items - known_items)
