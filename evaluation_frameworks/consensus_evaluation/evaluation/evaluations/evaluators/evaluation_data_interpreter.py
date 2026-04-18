@@ -1,8 +1,10 @@
-# =================================
-# DESCRIPTION
-# =================================
-# Contains methods to visualize evaluation output data.
-#
+"""
+Human-readable dump of a **single** evaluation result dict (stdout).
+
+Used for quick inspection after a run — not imported by the LaTeX table pipeline. For persisted
+metrics, use the structured pickles and ``print/`` reporting modules instead.
+"""
+
 
 def print_evaluation_result(res: dict):
     """ Prints output data to a console.

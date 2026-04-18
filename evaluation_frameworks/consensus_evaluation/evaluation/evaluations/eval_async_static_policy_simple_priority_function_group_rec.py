@@ -1,3 +1,10 @@
+"""
+**Eval — async mediator, static threshold, group-level EASer recommender.**
+
+Uses ``RecommendationEngineGroupAllIndividualEaser`` + aggregated group EASer: candidate lists come
+from a **group** recommender path while still using async round structure and static window thresholds.
+"""
+
 import gc
 from multiprocessing import get_context
 from typing import Any, Dict, List, Literal

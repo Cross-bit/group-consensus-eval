@@ -1,3 +1,11 @@
+"""
+**Tune / validation — async + sigmoid threshold + individual EASer.**
+
+Grid-searches sigmoid hyperparameters (and related knobs) per ``W`` and group type; aggregates mean
+rounds-to-consensus into DataFrames / LaTeX via ``LaTeXTableGeneratorSIUnitx``. Not the default
+``eval-full`` orchestration — use for choosing ``DEFAULT_SIGMOID_PARAMS`` in the matching ``eval_*``.
+"""
+
 from itertools import product
 from typing import Any, Dict, List, Literal, Tuple
 

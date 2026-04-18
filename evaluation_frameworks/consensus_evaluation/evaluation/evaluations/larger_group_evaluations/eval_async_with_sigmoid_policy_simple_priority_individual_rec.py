@@ -1,3 +1,9 @@
+"""
+**Large-group eval — async sigmoid + per-user EASer.**
+
+Mirrors ``eval_async_with_sigmoid_policy_simple_priority_individual_rec`` for larger ``--group-size``.
+"""
+
 import gc
 from typing import Any, Dict, List, Literal
 

@@ -1,3 +1,10 @@
+"""
+**Eval — hybrid mediator with updatable group / individual engines and feedback.**
+
+Uses ``ConsensusMediatorHybridApproachWithFeedback`` and ``HybridMediatorUpdatableFactoryBuilder``:
+both the group profile aggregation and per-user components can change across rounds; sigmoid window policy.
+"""
+
 import gc
 from typing import Any, Dict, List, Literal
 

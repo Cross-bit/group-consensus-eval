@@ -1,3 +1,11 @@
+"""
+**Eval — async mediator, sigmoid window-fill threshold, per-user EASer recommender.**
+
+Round-based async consensus with ``ThresholdPolicySigmoid`` on the redistribution window,
+``RecommendationEngineIndividualEaser``, and ``SimplePriorityFunction``. Runs fixed hyperparameters
+per ``W`` (see ``DEFAULT_SIGMOID_PARAMS``); results via ``autorun`` (test split, RFC/NDCG tables).
+"""
+
 import gc
 from typing import Any, Dict, List, Literal
 

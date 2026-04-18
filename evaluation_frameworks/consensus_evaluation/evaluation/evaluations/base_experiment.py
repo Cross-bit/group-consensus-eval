@@ -1,3 +1,13 @@
+"""
+Shared base for ``eval_*.py`` and ``tune_*.py`` experiment entrypoints.
+
+* ``ConsensusExperimentBase`` — declares defaults (window ``W``, group types, biases, NDCG cutoffs) and
+  hooks ``compute_results()`` / ``make_table()``; CLI is built from ``build_autorun_argparser()``.
+* Companion helpers — RFC/LaTeX table builders and bias picking for multi-bias runs.
+
+Persistence and ``--mode`` live in ``config.autorun`` (pickle layout under ``cache/cons_evaluations/``).
+"""
+
 from __future__ import annotations
 
 import argparse

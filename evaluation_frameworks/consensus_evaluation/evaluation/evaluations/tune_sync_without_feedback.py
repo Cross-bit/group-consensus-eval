@@ -1,3 +1,9 @@
+"""
+**Tune — sync mediator without feedback (group same-EASer + aggregated lists).**
+
+Explores discrete knobs on the sync-without-feedback stack; validation split defaults for speed.
+"""
+
 from typing import Any, Dict, List, Literal
 
 import pandas as pd

@@ -1,12 +1,11 @@
 """
-Zpětná kompatibilita: dříve tento soubor procházel více ``first_round_ration`` —
-to patří do ladění (``tune_hybrid_general_rec_individual.py``), ne do standardní eval.
+**Compatibility entrypoint — same experiment class as ``eval_hybrid_general_rec_individual``.**
 
-Standardní eval s fixním poměrem prvních kol je
-``eval_hybrid_general_rec_individual`` (hodnota ``first_r_ration`` v
-``DEFAULT_SIGMOID_PARAMS`` pro dané ``w_size``).
+English: historically this module swept ``first_round_ration``; that belongs in
+``tune_hybrid_general_rec_individual``. The primary **eval** with a fixed ratio is
+``eval_hybrid_general_rec_individual`` (see ``DEFAULT_SIGMOID_PARAMS`` / ``first_r_ration`` per ``W``).
 
-Tento modul jen přesměruje ``autorun`` na stejnou třídu jako tam.
+Czech: zbytek popisu viz výše — tento soubor jen přesměruje ``autorun`` na stejnou třídu.
 """
 
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import autorun

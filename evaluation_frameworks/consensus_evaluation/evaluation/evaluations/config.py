@@ -1,5 +1,12 @@
 """
-Výsledky evaluací z ``autorun()`` ukládá ``safe_eval_res`` / načítá ``load_eval_res``.
+Evaluation I/O and ``autorun()`` orchestration for all experiment modules.
+
+**Role:** resolve cache paths (labeled vs legacy layout), run ``compute_results()`` in ``compute`` or
+``load`` mode, optionally start JSONL timing via ``debug_profile`` when ``--debug-profile`` or
+``CONS_EVAL_DEBUG_PROFILE=1``.
+
+**Main entrypoints:** ``autorun()``, ``safe_eval_res`` / ``load_eval_res`` — used by every
+``if __name__ == "__main__"`` block in ``eval_*`` and ``tune_*``.
 
 Kořen cache: ``utils.config.CACHE_FILES_DIR`` → obvykle ``<projekt>/analysis/cache/``.
 

@@ -1,3 +1,10 @@
+"""
+**Tune — async + static threshold + group EASer path.**
+
+Same role as the individual static async tune script, but for the **group** recommender configuration
+aligned with ``eval_async_static_policy_simple_priority_function_group_rec``.
+"""
+
 from typing import Any, Dict, List, Literal
 
 import pandas as pd

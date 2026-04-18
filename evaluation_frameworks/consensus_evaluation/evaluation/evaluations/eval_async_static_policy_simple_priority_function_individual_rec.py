@@ -1,3 +1,10 @@
+"""
+**Eval — async mediator, static threshold, per-user EASer recommender.**
+
+``ThresholdPolicyStatic`` with per-window ``t_value`` defaults; same async consensus loop as other
+static async experiments but **individual** recommendation engine (not group-aggregated lists).
+"""
+
 from typing import Any, Dict, List, Literal
 
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.base_experiment import (

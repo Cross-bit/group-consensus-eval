@@ -1,14 +1,19 @@
-# =================================
-# DESCRIPTION
-# =================================
-# Contains factory builder classes for creating configured
-# consensus mediator instances for evaluation.
-#
+"""
+**Mediator factories** for experiments: map ``(user_ids,) -> (mediator, meta_dict)``.
+
+Builders (async / sync / hybrid) mirror the construction steps in production mediators — recommender
+engine, priority function, redistribution unit, threshold policy, mediator class — so ``Runner.run``
+can swap entire algorithm stacks without branching on experiment name.
+
+Return ``meta`` is stored in evaluation metadata for tables (method name, component classes, etc.).
+"""
 
 from typing import Any, Dict
 
 
 class AsyncMediatorFactoryBuilder:
+    """Fluent builder for async mediators (per-user engine + redistribution + threshold + mediator)."""
+
     def __init__(self):
         self._mk_recommender = None
         self._mk_priority = None
@@ -67,6 +72,8 @@ class AsyncMediatorFactoryBuilder:
 
 
 class SyncMediatorFactoryBuilderSync:
+    """Fluent builder for sync mediators (group EASer aggregate + ``ConsensusMediatorSyncApproach``)."""
+
     def __init__(self):
         self._mk_group_algorithm = None
         self._mk_group_recommender = None
@@ -100,8 +107,7 @@ class SyncMediatorFactoryBuilderSync:
 
 
 class HybridMediatorFactoryBuilder:
-    """
-    """
+    """Fluent builder for ``ConsensusMediatorHybridApproach`` (per-user async branch + group sync branch)."""
 
     def __init__(self):
         # general (per-user) větev (async-like)

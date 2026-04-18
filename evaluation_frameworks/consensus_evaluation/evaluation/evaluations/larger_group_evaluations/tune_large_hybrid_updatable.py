@@ -1,3 +1,10 @@
+"""
+**Large-group tune — hybrid updatable sweeps with ``RunnerLargeGroups``.**
+
+Hyperparameter exploration analogous to ``tune_hybrid_individual_updatable`` but stressing bigger
+``--group-size`` regimes (more expensive; reduce ``GROUPS_COUNT`` for smoke tests).
+"""
+
 import gc
 import logging
 import sys

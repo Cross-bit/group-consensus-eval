@@ -1,3 +1,10 @@
+"""
+**Tune — sync + feedback with mean aggregation variant.**
+
+Variant sweep over ``GR_AggregatedProfilesUpdatable`` / mean-style feedback parameters (see class
+``TuneSyncWithFeedbackMean``); companion to EMA-focused tuning.
+"""
+
 from typing import Any, Dict, List, Literal
 
 import pandas as pd

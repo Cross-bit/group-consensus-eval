@@ -1,3 +1,10 @@
+"""
+**Tune — sync + feedback (EMA-style aggregation strategies / alphas).**
+
+Uses process pools for some sweeps; picks feedback hyperparameters for the sync-with-feedback family
+that ``eval_sync_with_feedback_ema`` can fix for fixed-parameter eval runs.
+"""
+
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Any, Dict, List, Literal, Tuple

@@ -1,3 +1,10 @@
+"""
+**Large-group eval — async sigmoid + group EASer lists.**
+
+Same mediator recipe as the non-large ``eval_async_*_group_rec`` entrypoints but parameterized for
+bigger ``--group-size`` via ``RunnerLargeGroups``.
+"""
+
 import gc
 from typing import Any, Dict, List, Literal
 

@@ -16,7 +16,7 @@ The sibling package **`general_recommender_evaluation/`** holds separate MovieLe
 | `consensus_algorithm/` | Core algorithm pieces: `recommender_engine`, `redistribution_unit`, `priority_queue`, `models`. |
 | `synthetic_groups/` | Synthetic group construction, test-set splits, embedding helpers, generator tests. |
 | `evaluation/` | Experiment pipeline: dataset preparation, shared config, and runnable experiment modules under `evaluations/`. |
-| `evaluation/evaluations/evaluators/` | Evaluator runners, consensus evaluator, and `consensus_evaluation_agents/` (simulated user agents). |
+| `evaluation/evaluations/evaluators/` | Evaluator stack (`Runner`, factories, `ConsensusAgentBasedEvaluator`, agents); package overview in `evaluators/__init__.py`. |
 
 ### Why `evaluation` / `evaluations`?
 

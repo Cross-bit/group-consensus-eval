@@ -1,3 +1,13 @@
+"""
+``ConsensusAgentBasedEvaluator`` — **per-group simulator** used by ``Runner.run``.
+
+Builds on ``UserVoteSimulator``: for each group it repeatedly asks the mediator for candidate lists,
+records votes, checks consensus termination, and collects optional NDCG statistics. Supports
+parallel execution (thread pool by default; optional process pool on Linux via env).
+
+Helper functions in this file also implement NDCG@k and ranking concatenation utilities shared by metrics.
+"""
+
 import os
 import sys
 import threading
@@ -19,14 +29,6 @@ import math
 import numpy as np
 from tqdm import tqdm
 import numpy as np
-
-# =================================
-# DESCRIPTION
-# =================================
-# Contains consensus-agent based evaluator that uses
-# simulation agent to vote over items.
-#
-#
 
 # Populated only for Linux fork-based process pool (see run_simulation).
 _MP_RUN_SIMULATION_STATE: Dict[str, Any] = {}
@@ -335,6 +337,7 @@ def diag_common_hits(all_recs, users_gt, k=10):
     }
 
 class ConsensusAgentBasedEvaluator:
+    """Runs many groups through ``UserVoteSimulator`` + mediator factory; aggregates RFC/NDCG stats."""
 
     def __init__(self, simulation_agent: UserVoteSimulator,
                 evaluation_set_type: str,

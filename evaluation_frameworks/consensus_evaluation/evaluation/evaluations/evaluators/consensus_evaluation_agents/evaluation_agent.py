@@ -1,3 +1,12 @@
+"""
+Simulated **users** during evaluation: ``UserVoteSimulator`` scores mediator-proposed items with a
+trained single-user recommender, compares scores to a like threshold, and feeds ``Vote`` objects back
+into the mediator for the next round.
+
+This is not a human study — it is the "evaluation agent" that makes async/sync/hybrid mediators
+comparable under identical preference noise assumptions.
+"""
+
 from collections import defaultdict
 from time import perf_counter
 from typing import List, Literal, Optional, Dict, Tuple

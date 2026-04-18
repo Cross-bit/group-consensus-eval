@@ -1,3 +1,9 @@
+"""
+**Tune — hybrid (general + individual) mediator, especially ``first_round_ration`` and sigmoid tables.**
+
+Used to choose hybrid defaults baked into ``eval_hybrid_general_rec_individual``; heavier than single-grid tunes.
+"""
+
 import copy
 import gc
 from typing import Any, Dict, List, Literal

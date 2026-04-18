@@ -1,3 +1,10 @@
+"""
+**Large-group eval — sync + feedback (EMA) at higher ``--group-size``.**
+
+Scales the ``eval_sync_with_feedback_ema`` stack to larger groups via ``RunnerLargeGroups`` and the
+same multiprocessing helpers as the standard sync eval.
+"""
+
 import gc
 from multiprocessing import get_context
 from typing import Any, Dict, List, Literal

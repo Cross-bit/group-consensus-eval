@@ -1,3 +1,10 @@
+"""
+**Tune — async + static threshold + individual EASer.**
+
+Sweeps static ``t_value`` (and related) grids; output is ranking-style tables for picking defaults used
+in ``eval_async_static_policy_simple_priority_function_individual_rec``.
+"""
+
 from typing import Any, Dict, List, Literal
 
 import pandas as pd

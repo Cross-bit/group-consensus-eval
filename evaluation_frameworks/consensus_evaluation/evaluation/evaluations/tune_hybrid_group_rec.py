@@ -1,3 +1,10 @@
+"""
+**Tune — hybrid mediator emphasizing the group-recommender branch hyperparameters.**
+
+Sweeps knobs tied to ``RecommendationEngineGroupAllIndividualEaser`` / hybrid group path; complements
+``tune_hybrid_general_rec_individual.py``.
+"""
+
 import gc
 from typing import Any, Dict, List, Literal
 

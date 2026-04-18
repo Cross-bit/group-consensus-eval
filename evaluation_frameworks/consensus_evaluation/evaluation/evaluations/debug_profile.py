@@ -1,3 +1,17 @@
+"""
+Optional **performance tracing** for consensus evaluations (off by default).
+
+Enable with **environment** ``CONS_EVAL_DEBUG_PROFILE=1`` and/or CLI ``--debug-profile`` on experiments
+(see ``config.autorun`` — it sets the env when the flag is passed). Writes append-only **JSONL** under
+``cache/cons_evaluations/_debug_profiles/*.jsonl``: session boundaries, coarse stages (e.g. dataset load),
+and per-group/per-round aggregates when the evaluator flushes simulation timers.
+
+**When to use:** diagnose slow ``Runner.run`` phases, worker imbalance, or hot spots inside
+``UserVoteSimulator`` — not needed for routine benchmark runs.
+
+``timed(...)`` context managers and ``log_event`` are no-ops when profiling is disabled, so imports stay cheap.
+"""
+
 import json
 import os
 import threading

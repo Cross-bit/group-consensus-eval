@@ -1,3 +1,10 @@
+"""
+**Tune — hybrid updatable stack focused on ``first_round_ration`` schedules.**
+
+Isolates how the async/sync hand-off ratio interacts with updatable group engines; feeds choices into
+hybrid updatable eval defaults.
+"""
+
 import copy
 import gc
 from typing import Any, Dict, List, Literal

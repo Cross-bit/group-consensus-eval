@@ -1,3 +1,10 @@
+"""
+**Tune — hybrid updatable engines (large parallel / threaded sweeps).**
+
+Broad search over hybrid-with-feedback updatable configuration before fixing parameters in
+``eval_hybrid_updatable``; can be expensive (uses ``ThreadPoolExecutor`` and extensive logging guards).
+"""
+
 import gc
 import logging
 import os

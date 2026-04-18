@@ -1,3 +1,10 @@
+"""
+**Large-group eval — hybrid updatable mediators at configurable ``--group-size``.**
+
+Same algorithm family as ``eval_hybrid_updatable`` but uses ``RunnerLargeGroups`` so each simulated
+group contains more users (CLI ``--group-size`` / Makefile ``GROUP_SIZE``).
+"""
+
 import gc
 from typing import Any, Dict, List, Literal
 

@@ -1,3 +1,10 @@
+"""
+**Eval — synchronous mediator with simulated feedback (EMA on scores).**
+
+Group same-EASer engine **with feedback** so each round can influence the next; still sync presentation
+(one shot per round from group model). Includes optional ``print_evaluation_result`` for debugging runs.
+"""
+
 import gc
 from multiprocessing import get_context
 from typing import Any, Dict, List, Literal

@@ -1,3 +1,11 @@
+"""
+Build **evaluation contexts** (sparse matrices, group lists, ground truth) and **vote simulators**.
+
+``build_context*`` / ``build_context_holdout`` wire dataset pickles from ``evaluation_preparation`` into
+the dict that ``Runner.refresh_context`` expects. Agent loaders construct ``UserVoteSimulator`` variants
+with trained EASer/LightFM models for the evaluation split.
+"""
+
 from collections import Counter
 from typing import Dict, List, Literal, Set, Tuple
 from lightfm import LightFM
@@ -22,16 +30,6 @@ from evaluation_frameworks.general_recommender_evaluation.algorithms.svd import 
 from utils.config import load_from_pickle, load_or_build_pickle
 from scipy.sparse import csr_matrix
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.debug_profile import log_event, timed
-
-# ==================================
-# DESCRIPTION
-# ==================================
-# Provides API to create context data for the evaluations.
-#
-# a) API for context (== the evaluation datasets) creation.
-# b) API for evaluation agents creation
-#
-#
 
 
 #

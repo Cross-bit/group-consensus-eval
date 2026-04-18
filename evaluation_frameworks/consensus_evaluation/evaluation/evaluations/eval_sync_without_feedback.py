@@ -1,3 +1,10 @@
+"""
+**Eval — synchronous mediator, no cross-round feedback.**
+
+``ConsensusMediatorSyncApproach`` with ``RecommendationEngineGroupAllSameEaser`` and group EASer
+aggregation; compares sync presentation without updating scores from simulated votes between rounds.
+"""
+
 import gc
 from multiprocessing import get_context
 from typing import Any, Dict, List, Literal

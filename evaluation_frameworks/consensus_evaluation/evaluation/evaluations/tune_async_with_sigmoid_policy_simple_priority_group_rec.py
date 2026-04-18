@@ -1,3 +1,10 @@
+"""
+**Tune — async + sigmoid + group EASer path (``RecommendationEngineGroupAllIndividualEaser``).**
+
+Grid over sigmoid parameters for the **group-async** configuration used by larger-group / group-rec
+async experiments; produces LaTeX-friendly summaries for choosing defaults.
+"""
+
 from itertools import product
 from typing import Any, Dict, List, Literal, Tuple
 

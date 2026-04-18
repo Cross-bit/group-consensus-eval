@@ -1,3 +1,9 @@
+"""
+**Large-group eval — async static threshold + group EASer path.**
+
+Counterpart to ``eval_async_static_policy_simple_priority_function_group_rec`` with ``RunnerLargeGroups``.
+"""
+
 import gc
 from typing import Any, Dict, List, Literal
 

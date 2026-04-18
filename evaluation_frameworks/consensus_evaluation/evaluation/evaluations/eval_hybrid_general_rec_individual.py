@@ -1,3 +1,11 @@
+"""
+**Eval — hybrid mediator (per-user async branch + group sync branch), general + individual engines.**
+
+``ConsensusMediatorHybridApproach`` combines individual EASer lists (async-style redistribution +
+sigmoid threshold) with a parallel sync group recommender path; fixed ``first_round_ration`` / sigmoid
+tables per ``W`` in ``DEFAULT_SIGMOID_PARAMS``.
+"""
+
 import gc
 from typing import Any, Dict, List, Literal
 

@@ -1,3 +1,10 @@
+"""
+**Tune — alternate mean-feedback experiment (underscore module).**
+
+Second exploration track for mean-based profile updates (``TuneSyncWithFeedbackMeanUnderscore``);
+kept separate from ``tune_sync_with_feedback_mean.py`` so Makefile / history can target either.
+"""
+
 from typing import Any, Dict, List, Literal
 
 import pandas as pd

@@ -1,3 +1,15 @@
+"""
+``Runner`` — high-level **batch driver** for one evaluation split × group type.
+
+Workflow: ``refresh_context(eval_split, group_type)`` loads tensors/maps via
+``evaluation_context_factory``, then ``run(factory_builder, ...)`` loops over groups, builds each
+mediator through the supplied **factory** (from ``consensus_mediator_factories``), and delegates
+per-group simulation to ``ConsensusAgentBasedEvaluator``. Handles population-mood biases, optional
+NDCG@k, worker pools (threads or optional Linux fork pool), and progress hooks.
+
+This module also hosts small helpers such as ``resolve_simulation_max_rounds`` used by evaluators.
+"""
+
 from collections import Counter
 from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple
 from lightfm import LightFM
@@ -47,11 +59,12 @@ def resolve_simulation_max_rounds(window_size: Optional[int] = None) -> int:
 
 
 class Runner:
+    """Orchestrates cached data context + repeated group-level consensus simulations."""
 
     def __init__(self,
                 cache_identifier="hold-out",
                 ignore_cache=False):
-        """Runner for the group recommenders evaluations."""
+        """Prepare an empty runner; call ``refresh_context`` before ``run``."""
 
         self.EVALUATION_SET_TYPE = None
         self.GROUP_TYPE = None
@@ -203,11 +216,12 @@ class Runner:
 
 
 class RunnerLargeGroups:
+    """Like ``Runner`` but loads **large-group** holdouts via ``build_context_large_holdout`` (fixed ``group_size``)."""
 
     def __init__(self,
                 cache_identifier="hold-out",
                 ignore_cache=False):
-        """Runner for the group recommenders evaluations."""
+        """Prepare empty large-group runner; set ``group_size`` before ``refresh_context`` / ``run``."""
 
         self.EVALUATION_SET_TYPE = None
 
