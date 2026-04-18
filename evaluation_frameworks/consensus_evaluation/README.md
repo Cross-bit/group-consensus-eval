@@ -15,10 +15,13 @@ The sibling package **`general_recommender_evaluation/`** holds separate MovieLe
 | `consensus_mediator.py` | Mediator orchestration and threshold policies (package entry point used by evaluators). |
 | `consensus_algorithm/` | Core algorithm pieces: `recommender_engine`, `redistribution_unit`, `priority_queue`, `models`. |
 | `synthetic_groups/` | Synthetic group construction, test-set splits, embedding helpers, generator tests. |
-| `evaluation/` | End-to-end evaluation: preparation, algo settings, and runnable `evaluations/` (tune scripts, larger-group variants, print/export). |
+| `evaluation/` | Experiment pipeline: dataset preparation, shared config, and runnable experiment modules under `evaluations/`. |
 | `evaluation/evaluations/evaluators/` | Evaluator runners, consensus evaluator, and `consensus_evaluation_agents/` (simulated user agents). |
 
-Nested READMEs (dataset paths, preparation steps):
+### Why `evaluation` / `evaluations`?
+
+The outer **`evaluation/`** package is the whole “run experiments on data” slice (preparation, factories, orchestration helpers). The inner **`evaluations/`** folder is only the **entrypoint modules** (`eval_*`, `tune_*`, `print/`, `larger_group_evaluations/`, …). The names overlap on purpose in English (“evaluation of evaluation”) but it is a bit nested; renaming the inner folder (for example to **`experiment_runs`**, **`cases`**, or **`suites`**) would be clearer, but it is a **large** mechanical change (imports, `Makefile`, `run_consensus.sh`, and every `-m …evaluation.evaluations…` path).
+
+Nested README (dataset paths, preparation):
 
 - [evaluation/evaluation_preparation/README.md](evaluation/evaluation_preparation/README.md)
-- [evaluation/algo_eval_settings/README.md](evaluation/algo_eval_settings/README.md)
