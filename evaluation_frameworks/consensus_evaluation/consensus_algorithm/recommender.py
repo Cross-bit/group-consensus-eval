@@ -9,7 +9,7 @@ from evaluation_frameworks.general_recommender_evaluation.algorithms.algorithm_b
 from evaluation_frameworks.general_recommender_evaluation.algorithms.group_algorithms.easer_group import GR_AggregatedProfilesUpdatable, GR_AggregatedRecommendations, TopKIterator
 from evaluation_frameworks.consensus_evaluation.consensus_algorithm.models import Vote
 from evaluation_frameworks.general_recommender_evaluation.algorithms.group_algorithms.interface import RecAlgoGroupAggregated, RecAlgoUpdatable
-from movies_data.dataset.data_access import MovieLensDatasetLoader
+from dataset.data_access import MovieLensDatasetLoader
 
 class GeneralRecommendationEngineBase(ABC):
 

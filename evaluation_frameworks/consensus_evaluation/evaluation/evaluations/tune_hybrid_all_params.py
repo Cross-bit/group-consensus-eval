@@ -1,5 +1,6 @@
 import gc
 import logging
+import os
 import sys
 import time
 import warnings
@@ -27,8 +28,6 @@ from evaluation_frameworks.general_recommender_evaluation.algorithms.group_algor
     GR_AggregatedRecommendations,
 )
 from latex_utils.latex_table_generator import LaTeXTableGeneratorSIUnitx
-
-GROUPTYPE_WORKERS = 2
 
 
 class _NullStdout:
@@ -132,23 +131,28 @@ class TuneHybridAllParams(ConsensusExperimentBase):
             sigmoid_params if sigmoid_params is not None else dict(type(self).DEFAULT_SIGMOID_PARAMS)
         )
 
-    def _lists(self):
+    def _grid_axes(self):
         if self.w_size not in self.sigmoid_params:
             raise ValueError(f"No SIGMOID_PARAMS for W_SIZE={self.w_size}")
         p = self.sigmoid_params[self.w_size]
+        raw_min = p["min_fill"]
+        if isinstance(raw_min, (int, float)):
+            min_fill_vals = [raw_min]
+        else:
+            min_fill_vals = list(raw_min)
         return (
             p["first_r_ration"],
             p["center"],
             p["steepness"],
             p["c_init"],
             p["max_fill"],
-            p["min_fill"],
+            min_fill_vals,
         )
 
     def compute_results(self) -> Dict[str, Dict[tuple, Dict[str, Any]]]:
-        *grid_axes, min_filling = self._lists()
+        first_rr, centers, steepnesses, c_inits, max_fills, min_fill_vals = self._grid_axes()
         results: Dict[str, Dict[tuple, Dict[str, Any]]] = {gt: {} for gt in self.group_types}
-        grid = list(product(*grid_axes))
+        grid = list(product(first_rr, centers, steepnesses, c_inits, max_fills, min_fill_vals))
 
         def run_for_group_type(group_type: str):
             local_results = {}
@@ -157,8 +161,10 @@ class TuneHybridAllParams(ConsensusExperimentBase):
             start_time = time.time()
 
             with tqdm(grid, desc=f"Grid @{group_type}", leave=False, dynamic_ncols=True) as pbar:
-                for first_round_r, center, steepness, c_init, max_fill in pbar:
-                    factory_method = lambda single_user_model, evaluation_set_csr, w=self.w_size, fr=first_round_r: (
+                for first_round_r, center, steepness, c_init, max_fill, min_filling in pbar:
+                    # Výchozí argumenty lambdy: vždycky svážou hodnoty z této iterace (jinak paralelní
+                    # vlákna / pozdější iterace přepíšou closure a do sigmoidu vlézne třeba list místo skaláru).
+                    factory_method = lambda single_user_model, evaluation_set_csr, w=self.w_size, fr=first_round_r, c_=center, st_=steepness, ci_=c_init, mf_=max_fill, minf=min_filling: (
                         HybridMediatorFactoryBuilder()
                         .with_general_recommender_engine(
                             lambda group: RecommendationEngineIndividualEaser(group, model_iterator=single_user_model)
@@ -171,11 +177,11 @@ class TuneHybridAllParams(ConsensusExperimentBase):
                             lambda ru: ThresholdPolicySigmoid(
                                 red_context=getattr(ru, "redistribution_context", ru),
                                 window_size=w,
-                                sigmoid_center=center,
-                                sigmoid_steepness=steepness,
-                                c_init=c_init,
-                                max_filling=max_fill,
-                                min_filling=min_filling,
+                                sigmoid_center=c_,
+                                sigmoid_steepness=st_,
+                                c_init=ci_,
+                                max_filling=mf_,
+                                min_filling=minf,
                             )
                         )
                         .with_group_algorithm(lambda: GR_AggregatedRecommendations(single_user_model))
@@ -198,7 +204,7 @@ class TuneHybridAllParams(ConsensusExperimentBase):
                         .build()
                     )
 
-                    key = (first_round_r, c_init, center, steepness, max_fill)
+                    key = (first_round_r, c_init, center, steepness, max_fill, min_filling)
 
                     try:
                         with quiet_stdout():
@@ -221,11 +227,21 @@ class TuneHybridAllParams(ConsensusExperimentBase):
 
             return group_type, local_results
 
-        with ThreadPoolExecutor(max_workers=GROUPTYPE_WORKERS) as ex:
-            futs = [ex.submit(run_for_group_type, gt) for gt in self.group_types]
-            for fut in tqdm(as_completed(futs), total=len(futs), desc="Group types", dynamic_ncols=True):
-                gt, partial = fut.result()
-                results[gt] = partial
+        grouptype_workers = max(
+            1,
+            min(int(os.environ.get("TUNE_HYBRID_H0_GROUPTYPE_WORKERS", "2")), len(self.group_types)),
+        )
+        if grouptype_workers == 1:
+            # Keep execution on main thread so run_simulation can enable process-pool mode.
+            for gt in tqdm(self.group_types, total=len(self.group_types), desc="Group types", dynamic_ncols=True):
+                key, partial = run_for_group_type(gt)
+                results[key] = partial
+        else:
+            with ThreadPoolExecutor(max_workers=grouptype_workers) as ex:
+                futs = [ex.submit(run_for_group_type, gt) for gt in self.group_types]
+                for fut in tqdm(as_completed(futs), total=len(futs), desc="Group types", dynamic_ncols=True):
+                    gt, partial = fut.result()
+                    results[gt] = partial
 
         return results
 

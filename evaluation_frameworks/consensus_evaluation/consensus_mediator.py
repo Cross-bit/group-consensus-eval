@@ -8,7 +8,7 @@ from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender 
 from evaluation_frameworks.consensus_evaluation.consensus_algorithm.redistribution_unit import RedistributionContext, RedistributionUnit, SimplePriorityFunction
 from evaluation_frameworks.consensus_evaluation.consensus_algorithm.models import Vote
 from evaluation_frameworks.general_recommender_evaluation.algorithms.easer_cached import EaserCached
-from movies_data.dataset.data_access import MovieLensDatasetLoader
+from dataset.data_access import MovieLensDatasetLoader
 
 class ThresholdPolicy(ABC):
     @abstractmethod

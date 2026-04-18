@@ -13,6 +13,8 @@ The core implementation is in `evaluation_frameworks/consensus_evaluation`.
 
 ![Consensus Framework Diagram](docs/consensus_framework.png)
 
+High-resolution PDF version: [docs/consensus_framework.pdf](docs/consensus_framework.pdf)
+
 At a high level:
 
 - a **General Recommender** provides candidate items,
@@ -23,10 +25,11 @@ At a high level:
 ## Repository Layout
 
 - `evaluation_frameworks/` — consensus algorithms, evaluators, context factories, print/export scripts
-- `movies_data/` — dataset loading and sparse cache usage for MovieLens pipelines (see `movies_data/README.md`)
+- `dataset/` — dataset loading and sparse cache usage for MovieLens pipelines (see `dataset/README.md`)
 - `utils/` — shared config/cache helpers (including `load_or_build_pickle`)
 - `cache/cons_evaluations/` — evaluation outputs used by reporting scripts
-- `run_eval*.sh` — orchestration scripts for standard and parallel runs
+- `run_consensus.sh` — single entry for full/parallel/tune/debug eval (see `./run_consensus.sh help` or `make consensus-help`)
+- `eval_notify.sh` — optional logging hook used by `run_consensus.sh eval-suite`
 - `unit_tests/` — targeted tests for mediator logic
 
 ## Quick Start
@@ -43,19 +46,19 @@ python -m pip install -r requirements.txt
 
 This repository does not track large MovieLens 32M raw/cache files in Git.
 
-- Read `movies_data/README.md` for expected local files.
-- Download the dataset locally and place it under `movies_data/dataset/ml-32m/` before running full evaluations.
+- Read `dataset/README.md` for expected local files.
+- Download the dataset locally and place it under `dataset/dataset/ml-32m/` before running full evaluations.
 
 ### 2) One-shot full evaluation (single workspace)
 
 ```bash
-CONS_EVAL_WORKERS=8 GROUPS_COUNT=1000 EVAL_WINDOWS="1 3 5 10" POPULATION_BIASES="0 1 2" ./run_eval_full_biases_windows.sh
+CONS_EVAL_WORKERS=8 GROUPS_COUNT=1000 EVAL_WINDOWS="1 3 5 10" POPULATION_BIASES="0 1 2" ./run_consensus.sh eval-full
 ```
 
 ### 3) High-throughput isolated parallel run (recommended on multi-core VM)
 
 ```bash
-SEED_FIRST=1 RUNS_ROOT=/dev/shm/analysis_runs EVAL_WINDOWS="1 3" POPULATION_BIASES="0 1 2" GROUPS_COUNT=1000 PARALLEL_JOBS=5 WORKERS_PER_JOB=20 ./run_eval_full_biases_windows_parallel_seeded.sh
+SEED_FIRST=1 RUNS_ROOT=/dev/shm/analysis_runs EVAL_WINDOWS="1 3" POPULATION_BIASES="0 1 2" GROUPS_COUNT=1000 PARALLEL_JOBS=5 WORKERS_PER_JOB=20 ./run_consensus.sh eval-parallel-seeded
 ```
 
 Why isolated runs matter:
@@ -91,7 +94,7 @@ Recommended pattern:
 2. Reuse `Runner`/context factory utilities instead of custom data-loading logic.
 3. Expose CLI via existing `autorun(...)` pattern from `evaluations/config.py`.
 4. Keep output keys consistent with current result schema so print/export scripts can consume it.
-5. Add module entry to `run_eval_full_biases_windows.sh` (and optionally parallel orchestration script).
+5. Add module entry to `run_consensus.sh` (`cmd_eval_full` / `cmd_eval_parallel_seeded` module lists).
 
 Minimal checklist for compatibility:
 
@@ -133,9 +136,13 @@ Implementation references:
 
 ## Useful Scripts
 
-- `run_eval_full_biases_windows.sh` — baseline sequential full evaluation
-- `run_eval_full_biases_windows_parallel_seeded.sh` — seeded, isolated parallel evaluation
-- `run_eval_w1_w3_parallel_isolated.sh` — focused isolated run for `W=1,3`
+- `./run_consensus.sh eval-full` — baseline sequential full evaluation
+- `./run_consensus.sh eval-parallel-seeded` — seeded, isolated parallel evaluation
+- `./run_consensus.sh eval-w1-w3-isolated` — focused isolated run for `W=1,3`
+- `./run_consensus.sh tune-hybrid` — hyperparameter tuning (H0/H1), not paper eval
+- `./run_consensus.sh sync-gcp` — optional rsync template (override `SYNC_SRC`, `SYNC_REMOTE`, `SYNC_SSH_KEY`)
+
+`make consensus-help` lists Makefile shortcuts.
 
 ## License / Usage
 

@@ -100,6 +100,14 @@ class TuneHybridIndividualUpdatable(ConsensusExperimentBase):
             min_fill=0,
             first_r_ration=[2, 3],
         ),
+        3: dict(
+            center=[1, 2],
+            steepness=[0.2, 0.75],
+            c_init=[0.2, 0.4, 0.7],
+            max_fill=[1, 2, 3],
+            min_fill=0,
+            first_r_ration=[1, 2, 3],
+        ),
         1: dict(
             center=[1],
             steepness=[0.2, 0.75],
@@ -125,6 +133,14 @@ class TuneHybridIndividualUpdatable(ConsensusExperimentBase):
             steepness=[0.2, 0.75],
             c_init=[0.2, 0.7],
             max_fill=[5, 10],
+            min_fill=0,
+        ),
+        3: dict(
+            first_r_ration=[1, 3],
+            center=[1, 2],
+            steepness=[0.2, 0.75],
+            c_init=[0.2, 0.7],
+            max_fill=[2, 3],
             min_fill=0,
         ),
         1: dict(
@@ -261,11 +277,17 @@ class TuneHybridIndividualUpdatable(ConsensusExperimentBase):
             1,
             min(int(os.environ.get("TUNE_HYBRID_UPD_GROUPTYPE_WORKERS", "1")), len(self.group_types)),
         )
-        with ThreadPoolExecutor(max_workers=grouptype_workers) as ex:
-            futs = [ex.submit(run_for_group_type, gt) for gt in self.group_types]
-            for fut in tqdm(as_completed(futs), total=len(futs), desc="Group types", dynamic_ncols=True):
-                gt, partial = fut.result()
-                results[gt] = partial
+        if grouptype_workers == 1:
+            # Keep execution on main thread so run_simulation can enable process-pool mode.
+            for gt in tqdm(self.group_types, total=len(self.group_types), desc="Group types", dynamic_ncols=True):
+                key, partial = run_for_group_type(gt)
+                results[key] = partial
+        else:
+            with ThreadPoolExecutor(max_workers=grouptype_workers) as ex:
+                futs = [ex.submit(run_for_group_type, gt) for gt in self.group_types]
+                for fut in tqdm(as_completed(futs), total=len(futs), desc="Group types", dynamic_ncols=True):
+                    gt, partial = fut.result()
+                    results[gt] = partial
 
         return results
 

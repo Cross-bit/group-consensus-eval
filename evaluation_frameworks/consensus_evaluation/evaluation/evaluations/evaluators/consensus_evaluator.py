@@ -1,5 +1,9 @@
+import os
+import sys
+import threading
 from time import perf_counter
 
+import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.debug_profile import (
     reset_simulation_aggregates,
@@ -23,6 +27,52 @@ import numpy as np
 # simulation agent to vote over items.
 #
 #
+
+# Populated only for Linux fork-based process pool (see run_simulation).
+_MP_RUN_SIMULATION_STATE: Dict[str, Any] = {}
+
+
+def _mp_simulate_one_worker(group: Tuple[int, ...]) -> Optional[Tuple[Tuple[int, ...], Dict[str, Any]]]:
+    """Child entry point: must read state from _MP_RUN_SIMULATION_STATE (fork copy on Linux)."""
+    ev: "ConsensusAgentBasedEvaluator" = _MP_RUN_SIMULATION_STATE["evaluator"]
+    evaluation_factory = _MP_RUN_SIMULATION_STATE["factory"]
+    t0 = perf_counter()
+    mediator, _ = evaluation_factory(group)
+    sim_add_time("sim.per_group.factory", perf_counter() - t0)
+    t0 = perf_counter()
+    simulation_result = ev._simulation_agent.simulate_group_decision(
+        group, mediator, ev._end_on_first_match, ev._max_rounds
+    )
+    sim_add_time("sim.per_group.simulate_decision", perf_counter() - t0)
+    sim_incr("sim.groups", 1)
+    if simulation_result["round_found"]:
+        return tuple(group), simulation_result
+    return None
+
+
+def _use_process_pool_for_groups(workers: int) -> bool:
+    """
+    ThreadPoolExecutor does not scale CPU-bound Python across cores (GIL).
+    Optional Linux fork-pool runs one group per process in parallel (true multi-core).
+
+    Enable: CONS_EVAL_USE_PROCESS_POOL=1 (Linux fork pool — skutečná multi-jádra).
+    Disable: unset / 0 (default) — ThreadPoolExecutor jako dřív (GIL, málo jader).
+    """
+    if workers <= 1:
+        return False
+    if sys.platform != "linux":
+        return False
+    # Fork z ne-main vlákna (např. ThreadPoolExecutor v tune_* přes group_type) je nebezpečný → vynutit threads.
+    if threading.current_thread() is not threading.main_thread():
+        return False
+    v = os.environ.get("CONS_EVAL_USE_PROCESS_POOL")
+    if v is None or str(v).strip() == "":
+        return False
+    raw = str(v).strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return raw in ("1", "true", "yes", "on")
+
 
 def ndcg_at_k(ranking: List[int], ground_truth: Set[int], k: int) -> float:
     """
@@ -336,14 +386,47 @@ class ConsensusAgentBasedEvaluator:
                     return tuple(group), simulation_result
                 return None
 
-            with ThreadPoolExecutor(max_workers=workers) as ex:
-                futures = [ex.submit(simulate_one, group) for group in groups]
-                for fut in tqdm(as_completed(futures), total=len(futures), desc=f"Processing groups ({workers} workers)"):
-                    result = fut.result()
-                    if result is None:
-                        continue
-                    gkey, sim_res = result
-                    matched_groups[gkey] = sim_res
+            def _merge_thread_results():
+                with ThreadPoolExecutor(max_workers=workers) as ex:
+                    futures = [ex.submit(simulate_one, group) for group in groups]
+                    for fut in tqdm(
+                        as_completed(futures),
+                        total=len(futures),
+                        desc=f"Processing groups ({workers} workers)",
+                    ):
+                        result = fut.result()
+                        if result is None:
+                            continue
+                        gkey, sim_res = result
+                        matched_groups[gkey] = sim_res
+
+            if _use_process_pool_for_groups(workers):
+                _MP_RUN_SIMULATION_STATE.clear()
+                _MP_RUN_SIMULATION_STATE["evaluator"] = self
+                _MP_RUN_SIMULATION_STATE["factory"] = evaluation_factory
+                try:
+                    ctx = mp.get_context("fork")
+                    with ctx.Pool(processes=workers) as pool:
+                        for result in tqdm(
+                            pool.imap_unordered(_mp_simulate_one_worker, groups, chunksize=1),
+                            total=len(groups),
+                            desc=f"Processing groups ({workers} proc)",
+                        ):
+                            if result is None:
+                                continue
+                            gkey, sim_res = result
+                            matched_groups[gkey] = sim_res
+                except Exception as e:
+                    print(
+                        f"[ConsensusAgentBasedEvaluator] CONS_EVAL_USE_PROCESS_POOL fork-pool failed ({e!r}); "
+                        "falling back to threads.",
+                        flush=True,
+                    )
+                    _merge_thread_results()
+                finally:
+                    _MP_RUN_SIMULATION_STATE.clear()
+            else:
+                _merge_thread_results()
 
         t0 = perf_counter()
         _, metadata = evaluation_factory([])

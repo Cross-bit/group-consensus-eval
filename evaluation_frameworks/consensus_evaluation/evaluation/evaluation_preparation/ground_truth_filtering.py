@@ -7,7 +7,7 @@ import multiprocessing as mp
 from scipy.sparse import csc_matrix, csr_matrix
 import numpy as np
 from tqdm import tqdm
-from movies_data.dataset.data_access import MovieLensDatasetLoader
+from dataset.data_access import MovieLensDatasetLoader
 from utils.config import load_or_build_pickle
 from scipy.sparse import csr_matrix
 

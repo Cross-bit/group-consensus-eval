@@ -17,7 +17,7 @@ from sklearn.neighbors import NearestNeighbors
 from surprise import SVD, Dataset, Reader
 from scipy.sparse import csr_matrix
 from sklearn.metrics.pairwise import cosine_similarity
-from movies_data.dataset.data_access import MovieLensDatasetLoader
+from dataset.data_access import MovieLensDatasetLoader
 from utils.config import load_or_build_pickle, CACHE_FILES_DIR
 
 import pickle

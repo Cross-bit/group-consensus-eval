@@ -74,23 +74,3 @@ class EaserCached(EaserBase):
         ]
 
         return TopKIterator(item_scores, exclude=exclude)
-
-
-
-#class TopKIterator:
-#    def __init__(self, item_scores: List[Tuple[int, float]], exclude: Optional[Set[int]] = None):
-#        self.items = sorted(
-#            [(item_id, score) for item_id, score in item_scores if exclude is None or item_id not in exclude],
-#            key=lambda x: -x[1]
-#        )
-#        self.index = 0
-#
-#    def __iter__(self):
-#        return self
-#
-#    def __next__(self) -> Tuple[int, float]:
-#        if self.index >= len(self.items):
-#            raise StopIteration
-#        result = self.items[self.index]
-#        self.index += 1
-#        return result

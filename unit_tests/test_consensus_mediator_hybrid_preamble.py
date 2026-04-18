@@ -92,14 +92,14 @@ def _install_lightweight_stubs() -> None:
         "evaluation_frameworks.general_recommender_evaluation.algorithms.easer_cached"
     ] = ec
 
-    _ensure_parent_chain("movies_data.dataset.data_access")
-    md = types.ModuleType("movies_data.dataset.data_access")
+    _ensure_parent_chain("dataset.data_access")
+    md = types.ModuleType("dataset.data_access")
 
     class MovieLensDatasetLoader:
         pass
 
     md.MovieLensDatasetLoader = MovieLensDatasetLoader
-    sys.modules["movies_data.dataset.data_access"] = md
+    sys.modules["dataset.data_access"] = md
 
 
 _install_lightweight_stubs()

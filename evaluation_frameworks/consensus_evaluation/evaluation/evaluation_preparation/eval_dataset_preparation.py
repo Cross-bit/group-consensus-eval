@@ -16,7 +16,7 @@ from evaluation_frameworks.consensus_evaluation.evaluation.evaluation_preparatio
 from evaluation_frameworks.consensus_evaluation.synthetic_groups.embeddings_extractor import EmbeddingExtractor
 from evaluation_frameworks.consensus_evaluation.synthetic_groups.groups_generator import GroupGenerator, GroupGeneratorRestrictedInteractions
 from evaluation_frameworks.consensus_evaluation.synthetic_groups.groups_testset_splitter import GroupsEvaluationSetsSplitter
-from movies_data.dataset.data_access import MovieLensDatasetLoader
+from dataset.data_access import MovieLensDatasetLoader
 from utils.config import load_or_build_pickle
 from scipy.sparse import csr_matrix
 

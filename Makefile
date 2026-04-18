@@ -295,6 +295,38 @@ table_rfc_large_group_size_comparisions:
 #	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.eval_async
 
 # =============================
+# CONSENSUS orchestration (single shell entry: ./run_consensus.sh)
+# =============================
+.PHONY: consensus-help consensus-eval-full consensus-eval-parallel consensus-eval-w1w3 consensus-tune-hybrid consensus-eval-phased consensus-eval-debug consensus-eval-suite consensus-sync-gcp
+
+consensus-help:
+	bash ./run_consensus.sh help
+
+consensus-eval-full:
+	bash ./run_consensus.sh eval-full
+
+consensus-eval-parallel:
+	bash ./run_consensus.sh eval-parallel-seeded
+
+consensus-eval-w1w3:
+	bash ./run_consensus.sh eval-w1-w3-isolated
+
+consensus-tune-hybrid:
+	bash ./run_consensus.sh tune-hybrid
+
+consensus-eval-phased:
+	bash ./run_consensus.sh eval-phased
+
+consensus-eval-debug:
+	bash ./run_consensus.sh eval-debug-one
+
+consensus-eval-suite:
+	bash ./run_consensus.sh eval-suite
+
+consensus-sync-gcp:
+	bash ./run_consensus.sh sync-gcp
+
+# =============================
 # API & DATA COLLECTIONS
 # =============================
 google-places-api:
