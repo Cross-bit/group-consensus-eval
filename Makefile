@@ -160,3 +160,25 @@ migrate-eval-cache-layout:
 
 table_rfc_large_group_size_comparisions:
 	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.table_rfc_large_group_size_comparisions --window-size $(W) --groups-count $(GROUPS_COUNT) --group-sizes 3 5 7 10
+
+LARGE_GROUP_SIZES ?= 5 7 10
+ONLY_AVAILABLE ?= 1
+table_rfc_large_group_size:
+	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.table_rfc_large_group_size_comparisions --window-size $(W) --groups-count $(GROUPS_COUNT) --group-sizes $(LARGE_GROUP_SIZES) $(if $(filter 1,$(ONLY_AVAILABLE)),--only-available,)
+
+# RFC vs group-size plot for large-group experiments (single W or tiled windows).
+LARGE_RFC_PLOT_WINDOWS ?=
+LARGE_RFC_PLOT_W ?= 1
+LARGE_RFC_PLOT_LAYOUT ?= row
+LARGE_RFC_PLOT_PALETTE ?= tab10
+LARGE_RFC_PLOT_FORMAT ?= pdf
+plot_rfc_large_group_size:
+	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.plot_rfc_large_group_size $(if $(strip $(LARGE_RFC_PLOT_WINDOWS)),--windows $(LARGE_RFC_PLOT_WINDOWS),--window-size $(LARGE_RFC_PLOT_W)) --groups-count $(GROUPS_COUNT) --group-sizes $(LARGE_GROUP_SIZES) --layout $(LARGE_RFC_PLOT_LAYOUT) --palette $(LARGE_RFC_PLOT_PALETTE) --output-format $(LARGE_RFC_PLOT_FORMAT) $(if $(filter 1,$(ONLY_AVAILABLE)),--only-available,)
+
+# Pattern-mining visuals from exported RFC dataframe (heatmap + correlation + cluster cloud).
+RFC_EXPORT_IN ?= cache/cons_evaluations/exports/rfc_results_flat.csv
+RFC_PATTERN_PREFIX ?= rfc_patterns
+RFC_PATTERN_CLUSTERS ?= 4
+RFC_PATTERN_INCLUDE_LARGE ?= 0
+plot_rfc_pattern_analysis:
+	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.plot_rfc_pattern_analysis --in $(RFC_EXPORT_IN) --prefix $(RFC_PATTERN_PREFIX) --clusters $(RFC_PATTERN_CLUSTERS) --windows $(WINDOWS) --biases $(BIASES) $(if $(filter 1,$(RFC_PATTERN_INCLUDE_LARGE)),--include-large-groups,)

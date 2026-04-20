@@ -28,6 +28,16 @@ ALGOS: List[str] = [
     "eval_async_static_policy_simple_priority_function_individual_rec.py",
 ]
 
+SHORT_NAME_BY_ALGO: Dict[str, str] = {
+    "eval_async_static_policy_simple_priority_function_individual_rec.py": "Async-Static-Ind",
+    "eval_async_static_policy_simple_priority_function_group_rec.py": "Async-Static-Grp",
+    "eval_async_with_sigmoid_policy_simple_priority_individual_rec.py": "Async-Dyn-Ind",
+    "eval_large_hybrid_general_rec_individual.py": "Hybrid-Ind",
+    "eval_large_hybrid_group_updatable.py": "Hybrid-Grp-EMA",
+    "eval_large_sync_without_feedback.py": "Sync",
+    "eval_large_sync_with_feedback_ema.py": "Sync-EMA",
+}
+
 
 def strategy_2_slug(algos: List[str]) -> Dict[str, str]:
     # Stable slug mapping aligned with core table naming.
@@ -88,6 +98,10 @@ def _safe_get_metric(d: Dict[str, Any], metric_key: str = "average") -> Optional
         except (TypeError, ValueError):
             pass
     return math.nan
+
+
+def _short_name_from_algo(algo_name: str) -> str:
+    return SHORT_NAME_BY_ALGO.get(algo_name, algo_name.replace(".py", ""))
 
 
 def _pick_bias_block(group_data: Dict[Any, Any], bias: float) -> Dict[str, Any]:
@@ -178,7 +192,8 @@ def create_table(
     rows = []
     for slug, algo_name in slug2algo.items():
         is_adj = apply_async_minus_one and adjust_A and ("A" in slug)
-        row: Dict[str, Any] = {"algorithm": slug + (" (RFC$_{adj.}$)" if is_adj else "")}
+        label = _short_name_from_algo(algo_name)
+        row: Dict[str, Any] = {"algorithm": label + (" (RFC$_{adj.}$)" if is_adj else "")}
         for gs, c in zip(group_sizes, cols):
             val = values.get(algo_name, {}).get(gs, math.nan)
             if is_adj and pd.notna(val):
