@@ -225,6 +225,26 @@ def _extract_scalar_metrics(stats: Dict[str, Any]) -> Dict[str, float]:
         suffix = key.replace("@", "_")
         out[f"{suffix}_per_user_ndcg_mean_overall"] = _safe_float(val.get("per_user_ndcg_mean_overall"))
         out[f"{suffix}_ndcg_com_mean_overall"] = _safe_float(val.get("ndcg_com_mean_overall"))
+
+    # Success-rate related fields used by RFC-vs-success tradeoff plots.
+    total = _safe_float(stats.get("total_rounds"))
+    matched_obj = stats.get("matched_groups")
+    matched_count = math.nan
+    if isinstance(matched_obj, (list, tuple)):
+        matched_count = float(len(matched_obj))
+    elif isinstance(matched_obj, (int, float)):
+        matched_count = float(matched_obj)
+    elif hasattr(matched_obj, "__len__") and not isinstance(matched_obj, (str, bytes, dict)):
+        try:
+            matched_count = float(len(matched_obj))
+        except Exception:
+            matched_count = math.nan
+    out["total_rounds"] = total
+    out["matched_count"] = matched_count
+    if math.isfinite(total) and total > 0 and math.isfinite(matched_count):
+        out["success_rate"] = matched_count / total
+    else:
+        out["success_rate"] = math.nan
     return out
 
 
@@ -266,7 +286,8 @@ def build_dataframe(cache_root: Path, latest_only: bool) -> pd.DataFrame:
     rows: List[Dict[str, Any]] = []
     for p, meta in parsed:
         try:
-            payload = load_from_pickle(str(p))
+            # Use absolute path so utils.config does not remap relative paths to CACHE_FILES_DIR.
+            payload = load_from_pickle(str(p.resolve()))
         except Exception:
             continue
 
@@ -296,6 +317,9 @@ def build_dataframe(cache_root: Path, latest_only: bool) -> pd.DataFrame:
         "group_type",
         "bias",
         "average",
+        "success_rate",
+        "matched_count",
+        "total_rounds",
         "variance",
         "std_dev",
     ]

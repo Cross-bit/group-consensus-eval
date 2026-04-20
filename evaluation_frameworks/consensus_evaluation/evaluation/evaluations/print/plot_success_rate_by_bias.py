@@ -65,12 +65,14 @@ def success_ratios_for_algo(
     eval_type: str,
     groups_count: int | None,
     merge_all_pickles: bool,
+    group_size: int | None,
 ) -> List[float]:
     """Stejna agregace jako radky v ``table_success_matches_all_windows`` (soucet pres group types)."""
     per_gt = _load_per_algo_group_bias(
         algo_name,
         w_size,
         eval_type=eval_type,
+        group_size=group_size,
         groups_count=groups_count,
         group_types=group_types,
         merge_all_pickles=merge_all_pickles,
@@ -105,6 +107,7 @@ def _plot_one_axis(
     eval_type: str,
     groups_count: int | None,
     merge_all_pickles: bool,
+    group_size: int | None,
     algos: Sequence[str],
     palette: str,
     use_czech: bool,
@@ -124,6 +127,7 @@ def _plot_one_axis(
             eval_type,
             groups_count,
             merge_all_pickles,
+            group_size,
         )
         y = np.asarray(ys, dtype=float)
         label = short_name_from_algo(algo_name)
@@ -157,6 +161,7 @@ def plot_success_rate_curves(
     eval_type: str,
     groups_count: int | None,
     merge_all_pickles: bool,
+    group_size: int | None,
     algos: Sequence[str],
     title: str | None,
     output: Path,
@@ -178,6 +183,7 @@ def plot_success_rate_curves(
             eval_type=eval_type,
             groups_count=groups_count,
             merge_all_pickles=merge_all_pickles,
+            group_size=group_size,
             algos=algos,
             palette=palette,
             use_czech=use_czech,
@@ -189,7 +195,7 @@ def plot_success_rate_curves(
             tit = (
                 (f"Úspěšnost shody vs. bias (agregace: {', '.join(group_types)}; " if use_czech else
                  f"Success rate vs bias (aggregated: {', '.join(group_types)}; ")
-                + f"W={window_size}; groups_count={gc})"
+                + f"W={window_size}; group_size={group_size}, groups_count={gc})"
             )
         ax.set_title(tit, fontsize=11)
     else:
@@ -227,6 +233,7 @@ def plot_success_rate_curves(
                 eval_type=eval_type,
                 groups_count=groups_count,
                 merge_all_pickles=merge_all_pickles,
+                group_size=group_size,
                 algos=algos,
                 palette=palette,
                 use_czech=use_czech,
@@ -240,9 +247,9 @@ def plot_success_rate_curves(
             gc = groups_count if groups_count is not None else "mixed"
             fig.suptitle(
                 (
-                    f"Úspěšnost shody vs. bias (agregace: {', '.join(group_types)}; groups_count={gc})"
+                    f"Úspěšnost shody vs. bias (agregace: {', '.join(group_types)}; group_size={group_size}, groups_count={gc})"
                     if use_czech
-                    else f"Success rate vs bias (aggregated: {', '.join(group_types)}; groups_count={gc})"
+                    else f"Success rate vs bias (aggregated: {', '.join(group_types)}; group_size={group_size}, groups_count={gc})"
                 ),
                 fontsize=12,
             )
@@ -285,6 +292,12 @@ def main() -> None:
         nargs="*",
         default=["similar", "outlier", "random"],
         help="Same aggregation as success-matches table.",
+    )
+    p.add_argument(
+        "--group-size",
+        type=int,
+        default=3,
+        help="Use only this group-size cache slice (default: 3). Set <=0 to use base cache without group_<n>.",
     )
     p.add_argument("--eval-type", default=EVAL_TYPE, choices=["train", "validation", "test"])
     p.add_argument("--groups-count", type=int, default=None)
@@ -334,6 +347,7 @@ def main() -> None:
 
     out = args.output if args.output is not None else _default_out_path(windows, args.output_format)
     gt = list(args.group_types) if args.group_types else ["similar", "outlier", "random"]
+    gs = args.group_size if args.group_size and args.group_size > 0 else None
 
     plot_success_rate_curves(
         windows=windows,
@@ -342,6 +356,7 @@ def main() -> None:
         eval_type=args.eval_type,
         groups_count=args.groups_count,
         merge_all_pickles=not args.latest_pickle_only,
+        group_size=gs,
         algos=ALGOS,
         title=args.title,
         output=out,

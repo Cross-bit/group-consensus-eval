@@ -140,8 +140,9 @@ SUCCESS_PLOT_LAYOUT ?= row
 SUCCESS_PLOT_PALETTE ?= tab10
 SUCCESS_PLOT_FORMAT ?= pdf
 SUCCESS_PLOT_ENGLISH ?= 0
+SUCCESS_PLOT_GROUP_SIZE ?= 3
 plot_success_rate_by_bias:
-	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.plot_success_rate_by_bias $(if $(strip $(SUCCESS_PLOT_WINDOWS)),--windows $(SUCCESS_PLOT_WINDOWS),--window-size $(SUCCESS_PLOT_W)) --biases $(BIASES) --groups-count $(GROUPS_COUNT) --layout $(SUCCESS_PLOT_LAYOUT) --palette $(SUCCESS_PLOT_PALETTE) --output-format $(SUCCESS_PLOT_FORMAT) $(if $(filter 1,$(SUCCESS_PLOT_ENGLISH)),--english,)
+	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.plot_success_rate_by_bias $(if $(strip $(SUCCESS_PLOT_WINDOWS)),--windows $(SUCCESS_PLOT_WINDOWS),--window-size $(SUCCESS_PLOT_W)) --biases $(BIASES) --groups-count $(GROUPS_COUNT) --group-size $(SUCCESS_PLOT_GROUP_SIZE) --layout $(SUCCESS_PLOT_LAYOUT) --palette $(SUCCESS_PLOT_PALETTE) --output-format $(SUCCESS_PLOT_FORMAT) $(if $(filter 1,$(SUCCESS_PLOT_ENGLISH)),--english,)
 
 K ?= 10
 # NDCG tabulka: jeden vybraný bias — buď pořadí po seřazení β (0,1,2), nebo explicitní POPULATION_BIAS.
@@ -175,10 +176,11 @@ LARGE_RFC_PLOT_FORMAT ?= pdf
 plot_rfc_large_group_size:
 	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.plot_rfc_large_group_size $(if $(strip $(LARGE_RFC_PLOT_WINDOWS)),--windows $(LARGE_RFC_PLOT_WINDOWS),--window-size $(LARGE_RFC_PLOT_W)) --groups-count $(GROUPS_COUNT) --group-sizes $(LARGE_GROUP_SIZES) --layout $(LARGE_RFC_PLOT_LAYOUT) --palette $(LARGE_RFC_PLOT_PALETTE) --output-format $(LARGE_RFC_PLOT_FORMAT) $(if $(filter 1,$(ONLY_AVAILABLE)),--only-available,)
 
-# Pattern-mining visuals from exported RFC dataframe (heatmap + correlation + cluster cloud).
-RFC_EXPORT_IN ?= cache/cons_evaluations/exports/rfc_results_flat.csv
-RFC_PATTERN_PREFIX ?= rfc_patterns
-RFC_PATTERN_CLUSTERS ?= 4
-RFC_PATTERN_INCLUDE_LARGE ?= 0
-plot_rfc_pattern_analysis:
-	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.plot_rfc_pattern_analysis --in $(RFC_EXPORT_IN) --prefix $(RFC_PATTERN_PREFIX) --clusters $(RFC_PATTERN_CLUSTERS) --windows $(WINDOWS) --biases $(BIASES) $(if $(filter 1,$(RFC_PATTERN_INCLUDE_LARGE)),--include-large-groups,)
+RFC_EXPORT_OUT ?= cache/cons_evaluations/exports/rfc_results_full.csv
+export_rfc_full_csv:
+	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.export_rfc_dataframe --all-runs --out-csv $(RFC_EXPORT_OUT)
+
+RFC_SUCCESS_PREFIX ?= rfc_success
+plot_rfc_window_and_success_group_size:
+	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.plot_rfc_by_window_and_success_by_group_size --windows $(WINDOWS) --biases $(BIASES) --groups-count $(GROUPS_COUNT) --prefix $(RFC_SUCCESS_PREFIX) --all-runs
+
