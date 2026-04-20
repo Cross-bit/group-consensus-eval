@@ -1,10 +1,3 @@
-"""
-**Large-group tune — hybrid updatable sweeps with ``RunnerLargeGroups``.**
-
-Hyperparameter exploration analogous to ``tune_hybrid_individual_updatable`` but stressing bigger
-``--group-size`` regimes (more expensive; reduce ``GROUPS_COUNT`` for smoke tests).
-"""
-
 import gc
 import logging
 import sys
@@ -20,7 +13,7 @@ from tqdm import tqdm
 
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.base_experiment import ConsensusExperimentBase
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import autorun
-from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender_engine import (
+from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender import (
     RecommendationEngineGroupAllIndividualEaserUpdatable,
     RecommendationEngineGroupAllSameEaser,
 )

@@ -11,7 +11,8 @@ import pandas as pd
 
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.base_experiment import (
     ConsensusExperimentBase,
-    pick_bias_result_for_table,
+    rfc_average_from_tune_result_cell,
+    tune_group_types_present,
 )
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import autorun
 from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender_engine import RecommendationEngineGroupAllIndividualEaser
@@ -77,15 +78,22 @@ class TuneAsyncStaticPolicySimplePriorityGroupRec(ConsensusExperimentBase):
 
     def make_table(self, results: Dict[str, Dict[int, Dict[str, Any]]]) -> str:
         t_values = self._t_values_static_threshold()
+        group_cols = tune_group_types_present(results, self.group_types)
+        if not group_cols:
+            return (
+                "% tab:async_static_threshold_grid: v uložených výsledcích chybí očekávané group_type klíče "
+                "(prázdná tabulka). Zkus MODE=compute nebo sladit GROUPS_COUNT/W s původním tune během.\n"
+            )
         data: Dict[str, Any] = {"t": t_values}
-        for gt in self.group_types:
+        for gt in group_cols:
             col = []
+            gt_block = results.get(gt, {}) or {}
             for t in t_values:
-                col.append(pick_bias_result_for_table(results[gt][t])["average"])
+                col.append(rfc_average_from_tune_result_cell(gt_block.get(t) if isinstance(gt_block, dict) else None))
             data[gt] = col
-        cols = ["t"] + self.group_types
+        cols = ["t"] + group_cols
         df = pd.DataFrame(data)[cols]
-        df["average"] = df[self.group_types].mean(axis=1)
+        df["average"] = df[group_cols].mean(axis=1, skipna=True)
         generator = LaTeXTableGeneratorSIUnitx(
             df,
             column_specs=None,
@@ -94,7 +102,11 @@ class TuneAsyncStaticPolicySimplePriorityGroupRec(ConsensusExperimentBase):
         return generator.generate_table(
             caption=rf"Vyhodnocení metrik RFC pro asynchronní doporučovač se statickým parametrem $t$ pro velikost okna $w={self.w_size}$ a skupinovým doporučovačem.",
             label="tab:async_static_threshold_grid",
-            cell_bold_fn=lambda row_idx, col_idx, val: (col_idx >= 1 and val == df.iloc[:, col_idx].min()),
+            cell_bold_fn=lambda row_idx, col_idx, val: (
+                col_idx >= 1
+                and pd.notna(val)
+                and val == df.iloc[:, col_idx].min(skipna=True)
+            ),
         )
 
 

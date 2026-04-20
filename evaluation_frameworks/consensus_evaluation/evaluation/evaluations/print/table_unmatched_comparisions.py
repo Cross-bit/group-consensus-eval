@@ -4,6 +4,10 @@ import math
 import pandas as pd
 
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import load_eval_res
+from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.table_rfc_by_population_mood import (
+    order_algo_modules_paper,
+    short_name_from_algo,
+)
 from latex_utils.latex_table_generator import LaTeXTableGeneratorSIUnitx
 
 # ----- CONFIG -----
@@ -121,8 +125,8 @@ def create_table(
 ) -> str:
     slug2algo = strategy_2_slug(algos)
     rows = []
-    for slug, algo_name in slug2algo.items():
-        row: Dict[str, Any] = {"algorithm": slug}
+    for algo_name in order_algo_modules_paper(list(slug2algo.values())):
+        row: Dict[str, Any] = {"algorithm": short_name_from_algo(algo_name)}
         for gt in group_types:
             val = values.get(algo_name, {}).get(gt, math.nan)
             if as_percent and pd.notna(val):
@@ -151,8 +155,12 @@ def create_table(
 
 def create_slug_table(algos: List[str]) -> str:
     slug2algo = strategy_2_slug(algos)
+    algo_to_slug = {algo: slug for slug, algo in slug2algo.items()}
     df = pd.DataFrame(
-        [{"slug": slug, "algorithm": algo} for slug, algo in slug2algo.items()],
+        [
+            {"slug": algo_to_slug[algo], "algorithm": algo}
+            for algo in order_algo_modules_paper(list(slug2algo.values()))
+        ],
         columns=["slug", "algorithm"],
     )
     generator = LaTeXTableGeneratorSIUnitx(df, column_specs=None, column_width=3.0)

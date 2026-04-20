@@ -10,7 +10,8 @@ import pandas as pd
 
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.base_experiment import (
     ConsensusExperimentBase,
-    pick_bias_result_for_table,
+    rfc_average_from_tune_result_cell,
+    tune_group_types_present,
 )
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import autorun
 from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender_engine import RecommendationEngineGroupAllSameEaser
@@ -70,13 +71,24 @@ class TuneSyncWithoutFeedback(ConsensusExperimentBase):
         return results
 
     def make_table(self, results: dict) -> str:
+        group_cols = tune_group_types_present(results, self.group_types)
+        if not group_cols:
+            return (
+                "% tab:strategy_comparison: v uložených výsledcích chybí očekávané group_type klíče "
+                "(prázdná tabulka). Zkus MODE=compute nebo sladit GROUPS_COUNT/W s původním tune během.\n"
+            )
         data: Dict[str, Any] = {"Strategy": self.agg_strategies}
-        for gt in self.group_types:
+        for gt in group_cols:
             col = []
+            gt_block = results.get(gt, {}) or {}
             for strategy in self.agg_strategies:
-                col.append(pick_bias_result_for_table(results[gt][strategy])["average"])
+                col.append(
+                    rfc_average_from_tune_result_cell(
+                        gt_block.get(strategy) if isinstance(gt_block, dict) else None
+                    )
+                )
             data[gt] = col
-        cols = ["Strategy"] + self.group_types
+        cols = ["Strategy"] + group_cols
         df = pd.DataFrame(data)[cols]
         generator = LaTeXTableGeneratorSIUnitx(
             df,
@@ -86,7 +98,11 @@ class TuneSyncWithoutFeedback(ConsensusExperimentBase):
         return generator.generate_table(
             caption=r"Srovnání strategií synchronního doporučovače skrze metriky RFC.",
             label="tab:strategy_comparison",
-            cell_bold_fn=lambda row_idx, col_idx, val: val == df.iloc[:, col_idx].min(),
+            cell_bold_fn=lambda row_idx, col_idx, val: (
+                col_idx >= 1
+                and pd.notna(val)
+                and val == df.iloc[:, col_idx].min(skipna=True)
+            ),
         )
 
 

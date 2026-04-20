@@ -9,6 +9,10 @@ from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.rfc
     add_rfc_metric_arg,
     resolve_rfc_metric,
 )
+from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.table_rfc_by_population_mood import (
+    order_algo_modules_paper,
+    short_name_from_algo,
+)
 from latex_utils.latex_table_generator import LaTeXTableGeneratorSIUnitx
 
 # ----- konfigurace -----
@@ -114,11 +118,14 @@ def create_table(
             přidá se suffix (RFC_{adj.}) a hodnoty se sníží o 1.
     """
     slug2algo = strategy_2_slug(algos)
+    algo_to_slug = {algo: slug for slug, algo in slug2algo.items()}
 
     rows = []
-    for slug, algo_name in slug2algo.items():
+    for algo_name in order_algo_modules_paper(list(slug2algo.values())):
+        slug = algo_to_slug[algo_name]
         is_adj = adjust_A and ("A" in slug) and (metric_key == "average")
-        row = {"algorithm": slug + (" (RFC$_{adj.}$)" if is_adj else "")}
+        base_label = short_name_from_algo(algo_name)
+        row = {"algorithm": base_label + (" (RFC$_{adj.}$)" if is_adj else "")}
 
         for gt in group_types:
             val = math.nan
@@ -162,10 +169,13 @@ def create_slug_table(algos: List[str]) -> str:
     Creates LATEX table of algorithm slugs -- S0, S1, A1, H0 ... to their full name
     """
     slug2algo = strategy_2_slug(algos)
+    algo_to_slug = {algo: slug for slug, algo in slug2algo.items()}
 
-    # df of slug–algoritmus pairs
     df = pd.DataFrame(
-        [{"slug": slug, "algorithm": algo} for slug, algo in slug2algo.items()],
+        [
+            {"slug": algo_to_slug[algo], "algorithm": algo}
+            for algo in order_algo_modules_paper(list(slug2algo.values()))
+        ],
         columns=["slug", "algorithm"],
     )
 

@@ -3,7 +3,10 @@ import argparse
 import math
 import pandas as pd
 
-from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import load_eval_res
+from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import (
+    evaluation_results_dir,
+    load_eval_res,
+)
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.rfc_table_metric_spec import (
     add_rfc_metric_arg,
     resolve_rfc_metric,
@@ -15,27 +18,57 @@ EVAL_TYPE: str = "test"
 BIAS_KEY = 0.0
 
 ALGOS: List[str] = [
+    "eval_large_hybrid_general_rec_individual.py",
     "eval_large_hybrid_group_updatable.py",
     "eval_large_sync_with_feedback_ema.py",
-    "eval_async_with_sigmoid_policy_simple_priority_group_rec.py",
+    "eval_large_sync_without_feedback.py",
+    # Keep slug set aligned with core comparison table: async = A0,A1,A2 (no A3).
     "eval_async_with_sigmoid_policy_simple_priority_individual_rec.py",
+    "eval_async_static_policy_simple_priority_function_group_rec.py",
+    "eval_async_static_policy_simple_priority_function_individual_rec.py",
 ]
 
 
 def strategy_2_slug(algos: List[str]) -> Dict[str, str]:
-    res = {}
-    sync_ctr = 0
-    async_ctr = 0
-    hybrid_ctr = 0
+    # Stable slug mapping aligned with core table naming.
+    fixed = {
+        "eval_large_hybrid_general_rec_individual.py": "H0",
+        "eval_large_hybrid_group_updatable.py": "H1",
+        "eval_large_sync_with_feedback_ema.py": "S0",
+        "eval_large_sync_without_feedback.py": "S1",
+        "eval_async_with_sigmoid_policy_simple_priority_individual_rec.py": "A0",
+        "eval_async_static_policy_simple_priority_function_group_rec.py": "A1",
+        "eval_async_static_policy_simple_priority_function_individual_rec.py": "A2",
+    }
+
+    res: Dict[str, str] = {}
+    used = set()
+    sync_ctr = 2
+    async_ctr = 3
+    hybrid_ctr = 2
     for algo_name in algos:
+        if algo_name in fixed:
+            slug = fixed[algo_name]
+            res[slug] = algo_name
+            used.add(slug)
+            continue
         if "async" in algo_name:
+            while f"A{async_ctr}" in used:
+                async_ctr += 1
             res[f"A{async_ctr}"] = algo_name
+            used.add(f"A{async_ctr}")
             async_ctr += 1
         elif "hybrid" in algo_name:
+            while f"H{hybrid_ctr}" in used:
+                hybrid_ctr += 1
             res[f"H{hybrid_ctr}"] = algo_name
+            used.add(f"H{hybrid_ctr}")
             hybrid_ctr += 1
         else:
+            while f"S{sync_ctr}" in used:
+                sync_ctr += 1
             res[f"S{sync_ctr}"] = algo_name
+            used.add(f"S{sync_ctr}")
             sync_ctr += 1
     return res
 
@@ -83,6 +116,7 @@ def load_large_rfc_values(
     groups_count: int,
     group_sizes: List[int],
     metric_key: str = "average",
+    verbose_misses: bool = False,
 ) -> Dict[str, Dict[int, float]]:
     out: Dict[str, Dict[int, float]] = {}
     for algo_name in algos:
@@ -97,7 +131,20 @@ def load_large_rfc_values(
                     groups_count=groups_count,
                 )
             except Exception as e:
-                print(f"WARNING: Could not load {algo_name} for group_size={gs}: {e}")
+                expected_labeled = evaluation_results_dir(
+                    window_size=window_size,
+                    eval_type=eval_type,
+                    evaluation_name=algo_name,
+                    group_size=gs,
+                    groups_count=groups_count,
+                    layout="labeled",
+                )
+                print(
+                    f"WARNING: cache miss for {algo_name} @ group_size={gs}. "
+                    f"Expected: {expected_labeled}"
+                )
+                if verbose_misses:
+                    print(f"  detail: {e}")
                 out[algo_name][gs] = math.nan
                 continue
 
@@ -105,6 +152,16 @@ def load_large_rfc_values(
             bias_block = _pick_bias_block(group_block, BIAS_KEY)
             out[algo_name][gs] = _safe_get_metric(bias_block, metric_key=metric_key)
     return out
+
+
+def _filter_algos_with_any_values(values: Dict[str, Dict[int, float]], algos: List[str]) -> List[str]:
+    kept: List[str] = []
+    for a in algos:
+        per_size = values.get(a, {})
+        has_value = any(pd.notna(v) for v in per_size.values())
+        if has_value:
+            kept.append(a)
+    return kept
 
 
 def create_table(
@@ -150,6 +207,16 @@ if __name__ == "__main__":
     parser.add_argument("--window-size", default=10, help="Window size")
     parser.add_argument("--groups-count", type=int, default=100, help="Evaluation groups count used in cache path")
     parser.add_argument("--group-sizes", nargs="+", type=int, default=[3, 5, 7, 10], help="Group sizes to compare")
+    parser.add_argument(
+        "--only-available",
+        action="store_true",
+        help="Show only algorithms that have at least one non-NaN value in the selected cache slice.",
+    )
+    parser.add_argument(
+        "--verbose-misses",
+        action="store_true",
+        help="Print full exception details for cache misses.",
+    )
     add_rfc_metric_arg(parser)
     args = parser.parse_args()
 
@@ -166,11 +233,17 @@ if __name__ == "__main__":
         groups_count=args.groups_count,
         group_sizes=list(args.group_sizes),
         metric_key=spec.storage_key,
+        verbose_misses=args.verbose_misses,
+    )
+    table_algos = _filter_algos_with_any_values(vals, ALGOS) if args.only_available else ALGOS
+    print(
+        f"[table_rfc_large_group_size] included_algorithms={len(table_algos)}/{len(ALGOS)} "
+        f"(only_available={args.only_available})"
     )
     print(
         create_table(
             vals,
-            ALGOS,
+            table_algos,
             group_sizes=list(args.group_sizes),
             apply_async_minus_one=spec.subtract_one_for_async_slug,
             caption=rf"Porovnání large-group algoritmů — {spec.latex_caption_cs} (různé velikosti skupin).",

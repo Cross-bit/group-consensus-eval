@@ -26,7 +26,7 @@ CANONICAL_SLUG_SET = set(CANONICAL_SLUG_ORDER)
 SHORT_NAME_BY_SLUG: dict[str, str] = {
     "A0": "Async-Static-Grp",
     "A1": "Async-Static-Ind",
-    "A2": "Async-Dyn",
+    "A2": "Async-Dyn-Ind",
     "H0": "Hybrid-Ind",
     "H1": "Hybrid-Grp-EMA",
     "S0": "Sync",

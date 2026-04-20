@@ -6,19 +6,16 @@ from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.base_expe
     latex_rfc_table_group_types_by_biases,
 )
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import autorun
-from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender import RecommendationEngineGroupAllIndividualEaser
+from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender import RecommendationEngineIndividualEaser
 from evaluation_frameworks.consensus_evaluation.consensus_algorithm.redistribution_unit import RedistributionUnit, SimplePriorityFunction
 from evaluation_frameworks.consensus_evaluation.consensus_mediator import ConsensusMediatorAsyncApproach, ThresholdPolicyStatic
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.evaluators.consensus_mediator_factories import (
     AsyncMediatorFactoryBuilder,
 )
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.evaluators.evaluation_runner import RunnerLargeGroups
-from evaluation_frameworks.general_recommender_evaluation.algorithms.group_algorithms.easer_group import (
-    GR_AggregatedRecommendations,
-)
 
 
-class EvalLargeAsyncStaticPolicySimplePriorityFunctionGroupRec(ConsensusExperimentBase):
+class EvalLargeAsyncStaticPolicySimplePriorityFunctionIndividualRec(ConsensusExperimentBase):
     DEFAULT_EVAL_TYPE: Literal["train", "validation", "test"] = "test"
     DEFAULT_W_SIZE = 10
     DEFAULT_GROUPS_COUNT = 1000
@@ -27,10 +24,11 @@ class EvalLargeAsyncStaticPolicySimplePriorityFunctionGroupRec(ConsensusExperime
     DEFAULT_GROUP_TYPES: List[str] = ["random"]
     DEFAULT_POPULATION_BIASES = [0]
     DEFAULT_NDCG_KS = [5, 10, 20, 50, 100]
+    # Zarovnáno s eval_async_static_policy_simple_priority_function_individual_rec (core).
     DEFAULT_STATIC_PARAMS = {
         10: dict(t_value=9),
-        5: dict(t_value=2),
-        3: dict(t_value=1),
+        5: dict(t_value=4),
+        3: dict(t_value=2),
         1: dict(t_value=3),
     }
 
@@ -60,32 +58,27 @@ class EvalLargeAsyncStaticPolicySimplePriorityFunctionGroupRec(ConsensusExperime
         t_value = self._t_value()
         results: Dict[str, Dict[str, Any]] = {}
         r = RunnerLargeGroups()
-
         for slot_i, _group_type in enumerate(self.group_types, start=1):
             self.cons_eval_set_progress_slot(slot_i)
             r.refresh_context(self.eval_type, self.group_size)
 
-            def factory_method(single_user_model, evaluation_set_csr, t=t_value, w=self.w_size):
-                return (
-                    AsyncMediatorFactoryBuilder()
-                    .with_recommender_engine(
-                        lambda group, model=single_user_model, csr=evaluation_set_csr: RecommendationEngineGroupAllIndividualEaser(
-                            group, model=GR_AggregatedRecommendations(model)
-                        )
-                    )
-                    .with_priority_function(
-                        lambda group, model=single_user_model: SimplePriorityFunction(group, algorithm=model)
-                    )
-                    .with_threshold_policy(lambda t_=t: ThresholdPolicyStatic(t_param=t_))
-                    .with_redistribution(lambda group, pf: RedistributionUnit(group, pf))
-                    .with_mediator(
-                        lambda group_ids, rec, ru, th, w_=w: ConsensusMediatorAsyncApproach(
-                            group_ids, rec, ru, th, window_size=w_
-                        )
-                    )
-                    .build()
+            factory_method = lambda single_user_model, evaluation_set_csr, t=t_value, w=self.w_size: (
+                AsyncMediatorFactoryBuilder()
+                .with_recommender_engine(
+                    lambda group: RecommendationEngineIndividualEaser(group, model_iterator=single_user_model)
                 )
-
+                .with_priority_function(
+                    lambda group, model=single_user_model: SimplePriorityFunction(group, algorithm=model)
+                )
+                .with_threshold_policy(lambda t_=t: ThresholdPolicyStatic(t_param=t_))
+                .with_redistribution(lambda group, pf: RedistributionUnit(group, pf))
+                .with_mediator(
+                    lambda group_ids, rec, ru, th, w_=w: ConsensusMediatorAsyncApproach(
+                        group_ids, rec, ru, th, window_size=w_
+                    )
+                )
+                .build()
+            )
             res = r.run(
                 factory_method,
                 self.groups_count,
@@ -95,24 +88,22 @@ class EvalLargeAsyncStaticPolicySimplePriorityFunctionGroupRec(ConsensusExperime
             )
             results[_group_type] = res
             gc.collect()
-
         return results
 
     def make_table(self, results: Dict[str, Dict[str, Any]]) -> str:
         t_value = self._t_value()
         cap = (
             rf"RFC podle typu skupiny a population bias; velké skupiny ($n={self.group_size}$), "
-            rf"async static policy (group rec), $t={t_value}$, $w={self.w_size}$."
+            rf"async static policy (individual rec), $t={t_value}$, $w={self.w_size}$."
         )
         return latex_rfc_table_group_types_by_biases(
             results=results,
             group_types=self.group_types,
             metric_key="average",
             caption=cap,
-            label="tab:large_async_static_group_rfc_by_bias",
+            label="tab:large_async_static_individual_rfc_by_bias",
         )
 
 
 if __name__ == "__main__":
-    autorun(EvalLargeAsyncStaticPolicySimplePriorityFunctionGroupRec)
-
+    autorun(EvalLargeAsyncStaticPolicySimplePriorityFunctionIndividualRec)

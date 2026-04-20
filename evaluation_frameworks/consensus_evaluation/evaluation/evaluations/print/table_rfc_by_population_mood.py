@@ -1,7 +1,7 @@
 from collections import defaultdict
 import os
 import pickle
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import math
 import pandas as pd
@@ -34,12 +34,35 @@ ALGOS: List[str] = [
 SHORT_NAME_BY_ALGO: Dict[str, str] = {
     "eval_async_static_policy_simple_priority_function_individual_rec.py": "Async-Static-Ind",
     "eval_async_static_policy_simple_priority_function_group_rec.py": "Async-Static-Grp",
-    "eval_async_with_sigmoid_policy_simple_priority_individual_rec.py": "Async-Dyn",
+    "eval_async_with_sigmoid_policy_simple_priority_individual_rec.py": "Async-Dyn-Ind",
     "eval_hybrid_general_rec_individual.py": "Hybrid-Ind",
     "eval_hybrid_updatable.py": "Hybrid-Grp-EMA",
     "eval_sync_without_feedback.py": "Sync",
     "eval_sync_with_feedback_ema.py": "Sync-EMA",
 }
+
+# Pořadí řádků v tabulkách: hybrid → async → sync (v rámci rodiny stabilní pořadí jako v SHORT_NAME_BY_ALGO).
+PAPER_ORDER_SHORT_NAMES: Tuple[str, ...] = (
+    "Hybrid-Ind",
+    "Hybrid-Grp-EMA",
+    "Async-Static-Ind",
+    "Async-Static-Grp",
+    "Async-Dyn-Ind",
+    "Sync",
+    "Sync-EMA",
+)
+
+
+def order_algo_modules_paper(algos: List[str]) -> List[str]:
+    """Seřadí názvy eval modulů podle PAPER_ORDER_SHORT_NAMES; neznámé moduly na konec."""
+    rank = {n: i for i, n in enumerate(PAPER_ORDER_SHORT_NAMES)}
+
+    def sort_key(mod: str) -> tuple[int, str]:
+        short = short_name_from_algo(mod)
+        return (rank.get(short, 1000), short)
+
+    return sorted(algos, key=sort_key)
+
 
 # ----- pomocné funkce -----
 
@@ -174,6 +197,7 @@ def create_table_bias_columns(
             - tyto řádky se ignorují při hledání minim (bold).
     """
     slug2algo = strategy_2_slug(algos)
+    algo_to_slug = {algo: slug for slug, algo in slug2algo.items()}
 
     if bias_columns is not None:
         all_biases = [_bias_key(b) for b in bias_columns]
@@ -201,11 +225,12 @@ def create_table_bias_columns(
                 pass
         return math.nan
 
-    # postav řádky
+    # postav řádky (pořadí jako v přehledové tabulce variant, ne A/H/S z technických slugů)
     rows = []
-    for slug, algo_name in slug2algo.items():
+    for algo_name in order_algo_modules_paper(list(slug2algo.values())):
+        slug = algo_to_slug[algo_name]
         is_adj = apply_async_minus_one and adjust_A and ("A" in slug)
-        algo_label = display_name_for_slug(slug2algo, slug)
+        algo_label = short_name_from_algo(algo_name)
         row = {"algorithm": algo_label + (" (RFC$_{adj.}$)" if is_adj else "")}
         bias_values = results.get(algo_name, {}) or {}
         for bias in all_biases:
@@ -254,12 +279,17 @@ def create_slug_table(algos: List[str]) -> str:
     Creates LATEX table of algorithm slugs -- S0, S1, A1, H0 ... to their full name
     """
     slug2algo = strategy_2_slug(algos)
+    algo_to_slug = {algo: slug for slug, algo in slug2algo.items()}
 
-    # df of slug–algoritmus pairs
+    # df of slug–algoritmus pairs (řádky v pořadí přehledové tabulky)
     df = pd.DataFrame(
         [
-            {"slug": slug, "short_name": short_name_from_algo(algo), "algorithm": algo}
-            for slug, algo in slug2algo.items()
+            {
+                "slug": algo_to_slug[algo],
+                "short_name": short_name_from_algo(algo),
+                "algorithm": algo,
+            }
+            for algo in order_algo_modules_paper(list(slug2algo.values()))
         ],
         columns=["slug", "short_name", "algorithm"],
     )

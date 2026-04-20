@@ -8,7 +8,8 @@ Evaluation I/O and ``autorun()`` orchestration for all experiment modules.
 **Main entrypoints:** ``autorun()``, ``safe_eval_res`` / ``load_eval_res`` — used by every
 ``if __name__ == "__main__"`` block in ``eval_*`` and ``tune_*``.
 
-Kořen cache: ``utils.config.CACHE_FILES_DIR`` → obvykle ``<projekt>/analysis/cache/``.
+Kořen cache výsledků: pokud existuje ``<algos-eval>/cache/cons_evaluations``, použije se ten
+(jinak ``utils.config.CACHE_FILES_DIR/cons_evaluations``, typicky ``…/analysis/cache/``).
 
 **Aktuální** cesta (složky mají v názvu parametr, aby šly číst v průzkumníku):
 
@@ -50,7 +51,15 @@ from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.debug_pro
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 
-EVALUATIONS_DIR = CACHE_FILES_DIR / "cons_evaluations"
+# Dva běžné kořeny: (A) ``<text2>/analysis/cache/cons_evaluations`` z ``utils.config``,
+# (B) ``<algos-eval>/cache/cons_evaluations`` (např. ``tree cache/`` z kořene tohoto repa).
+# Když existuje (B), použij ho — jinak se tabulky/loader dívají jinam než reálná data na disku.
+_REPO_CONS_EVALUATIONS = Path(__file__).resolve().parents[4] / "cache" / "cons_evaluations"
+EVALUATIONS_DIR = (
+    _REPO_CONS_EVALUATIONS
+    if _REPO_CONS_EVALUATIONS.is_dir()
+    else CACHE_FILES_DIR / "cons_evaluations"
+)
 
 LayoutKind = Literal["labeled", "legacy"]
 
@@ -236,9 +245,11 @@ def _candidate_labeled_dirs(
         )
     )
 
-    # 2) backward compatible labeled path without metadata folders
-    #    (only when caller does NOT request strict metadata selection)
-    if not strict_metadata:
+    # 2) Přímá cesta ``w_<W>/split_<split>/<evaluation_name>/`` (bez ``eval_n_*``).
+    #    - Bez striktních metadat: jako dřív.
+    #    - Jen při ``groups_count``: přidá se i tato větev po (1), protože cache často má
+    #      ``eval_n_<N>`` jen u části oken; jinak tabulka končí na ``--`` pro menší W.
+    if not strict_metadata or groups_count is not None:
         candidates.append(
             evaluation_results_dir(
                 window_size=window_size,

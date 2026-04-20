@@ -130,9 +130,27 @@ table_rfc_by_population_mood_all_windows:
 table_success_matches_all_windows:
 	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.table_success_matches_all_windows --windows $(WINDOWS) --biases $(BIASES) --groups-count $(GROUPS_COUNT)
 
+# Success ratio vs bias (matplotlib).
+# - default: single window W=5
+# - for side-by-side panels set SUCCESS_PLOT_WINDOWS="1 3 5 10"
+# - default output format is PDF unless overridden
+SUCCESS_PLOT_W ?= 5
+SUCCESS_PLOT_WINDOWS ?=
+SUCCESS_PLOT_LAYOUT ?= row
+SUCCESS_PLOT_PALETTE ?= tab10
+SUCCESS_PLOT_FORMAT ?= pdf
+SUCCESS_PLOT_ENGLISH ?= 0
+plot_success_rate_by_bias:
+	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.plot_success_rate_by_bias $(if $(strip $(SUCCESS_PLOT_WINDOWS)),--windows $(SUCCESS_PLOT_WINDOWS),--window-size $(SUCCESS_PLOT_W)) --biases $(BIASES) --groups-count $(GROUPS_COUNT) --layout $(SUCCESS_PLOT_LAYOUT) --palette $(SUCCESS_PLOT_PALETTE) --output-format $(SUCCESS_PLOT_FORMAT) $(if $(filter 1,$(SUCCESS_PLOT_ENGLISH)),--english,)
+
 K ?= 10
+# NDCG tabulka: jeden vybraný bias — buď pořadí po seřazení β (0,1,2), nebo explicitní POPULATION_BIAS.
+BIAS_INDEX ?= 0
+# Prázdné ⇒ použije se BIAS_INDEX. Např. POPULATION_BIAS=1 nebo POPULATION_BIAS=2
+POPULATION_BIAS ?=
+
 table_ndcg_comparisions:
-	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.table_ndcg_comparisions --k $(K) --window-size $(W)
+	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.table_ndcg_comparisions --k $(K) --window-size $(W) --groups-count $(GROUPS_COUNT) $(if $(strip $(POPULATION_BIAS)),--population-bias $(POPULATION_BIAS),--bias-index $(BIAS_INDEX))
 
 table_unmatched_comparisions:
 	python3 -m evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.table_unmatched_comparisions --window-size $(W) --bias 0

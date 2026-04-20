@@ -1,10 +1,16 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import math
 import pandas as pd
 from collections import defaultdict
 import argparse
 
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import load_eval_res
+from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.print.table_rfc_by_population_mood import (
+    _bias_key,
+    _sort_bias_keys,
+    order_algo_modules_paper,
+    short_name_from_algo,
+)
 from latex_utils.latex_table_generator import LaTeXTableGeneratorSIUnitx
 
 # ----- KONFIGURACE -----
@@ -14,7 +20,6 @@ EVAL_TYPE = "test"
 
 WINDOW_SIZE=10
 NDCG_K = 20           # parametrizace K
-BIAS_IDX = 0          # parametrizace indexu biasu
 
 ALGOS = [
     "eval_hybrid_general_rec_individual.py",
@@ -25,26 +30,6 @@ ALGOS = [
     "eval_sync_without_feedback.py",
     "eval_sync_with_feedback_ema.py",
 ]
-
-# ----- SLUGY -----
-
-def strategy_2_slug(algos: List[str]) -> Dict[str, str]:
-    res = {}
-    sync_ctr = 0
-    async_ctr = 0
-    hybrid_ctr = 0
-    for algo_name in algos:
-        if "async" in algo_name:
-            res[f"A{async_ctr}"] = algo_name
-            async_ctr += 1
-        elif "hybrid" in algo_name:
-            res[f"H{hybrid_ctr}"] = algo_name
-            hybrid_ctr += 1
-        else:
-            res[f"S{sync_ctr}"] = algo_name
-            sync_ctr += 1
-
-    return res
 
 # ----- METRIKY -----
 
@@ -67,6 +52,33 @@ def latex_ndcg_data_column_headers(k: int) -> List[str]:
         rf"\multicolumn{{1}}{{c}}{{$\mathrm{{NDCG@{kk}}}_{{\mathrm{{com_{{min}}}}}}$}}",
     ]
 
+
+def _pick_bias_key(
+    group_data: Dict[Any, Any],
+    bias_idx: int,
+    population_bias: Optional[float],
+) -> Optional[Any]:
+    """
+    Vyber klíč biasu ve větvi ``group_type`` — buď podle ``--population-bias`` (β v datech),
+    nebo podle ``--bias-index`` vůči seřazeným klíčům (0 → nejnižší β, typicky 0.0).
+    """
+    if not isinstance(group_data, dict) or not group_data:
+        return None
+    keys_sorted = _sort_bias_keys(list(group_data.keys()))
+    if population_bias is not None:
+        target = float(population_bias)
+        for k in keys_sorted:
+            try:
+                if _bias_key(k) == target:
+                    return k
+            except (TypeError, ValueError):
+                continue
+        return None
+    if bias_idx < 0 or bias_idx >= len(keys_sorted):
+        return None
+    return keys_sorted[bias_idx]
+
+
 # ----- DATOVÉ NAČÍTÁNÍ -----
 
 def load_ndcg_metrics(
@@ -75,12 +87,16 @@ def load_ndcg_metrics(
     eval_type: str,
     ndcg_key: str,
     bias_idx: int,
+    groups_count: Optional[int] = None,
+    population_bias: Optional[float] = None,
 ) -> Dict[str, Dict[str, float]]:
     algo2metrics: Dict[str, Dict[str, float]] = {}
 
     for algo_name in algos:
         try:
-            loaded = load_eval_res(algo_name, window_size, eval_type)
+            loaded = load_eval_res(
+                algo_name, window_size, eval_type, groups_count=groups_count
+            )
         except Exception as e:
             print(f"⚠️  Chyba při načítání {algo_name}: {e}")
             continue
@@ -92,12 +108,10 @@ def load_ndcg_metrics(
             if not isinstance(group_data, dict):
                 continue
 
-            # vyber jen bias podle indexu
-            bias_keys = list(group_data.keys())
-            if bias_idx >= len(bias_keys):
+            bias_key = _pick_bias_key(group_data, bias_idx, population_bias)
+            if bias_key is None:
                 continue
 
-            bias_key = bias_keys[bias_idx]
             bias_data = group_data[bias_key]
 
             ndcg_block = bias_data.get(ndcg_key)
@@ -119,12 +133,10 @@ def load_ndcg_metrics(
 # ----- TABULKA -----
 
 def build_ndcg_dataframe(data: Dict[str, Dict[str, float]], algos: List[str], k: int) -> pd.DataFrame:
-    slug2algo = strategy_2_slug(algos)
-
     rows = []
-    for slug, algo_name in slug2algo.items():
+    for algo_name in order_algo_modules_paper(algos):
         algo_metrics = data.get(algo_name, {})
-        row = {"algorithm": slug}
+        row = {"algorithm": short_name_from_algo(algo_name)}
         for metric, _ in DISPLAY_COLUMNS:
             row[metric] = algo_metrics.get(metric, math.nan)
         rows.append(row)
@@ -135,7 +147,12 @@ def build_ndcg_dataframe(data: Dict[str, Dict[str, float]], algos: List[str], k:
     return df.rename(columns=rename_map)
 
 
-def create_ndcg_latex_table(df: pd.DataFrame, k: int, bias_idx: int) -> str:
+def create_ndcg_latex_table(
+    df: pd.DataFrame,
+    k: int,
+    bias_idx: int,
+    population_bias: Optional[float],
+) -> str:
     metric_cols = [c for c in df.columns if c != "algorithm"]
 
     generator = LaTeXTableGeneratorSIUnitx(
@@ -144,9 +161,16 @@ def create_ndcg_latex_table(df: pd.DataFrame, k: int, bias_idx: int) -> str:
         column_width=1.8,
     )
 
+    if population_bias is not None:
+        cap_bias = rf"population bias $\beta={population_bias}$"
+        lbl = f"tab:ndcg_at_{k}_beta_{str(population_bias).replace('.', '_')}"
+    else:
+        cap_bias = rf"bias index {bias_idx} (po seřazení klíčů $\beta$)"
+        lbl = f"tab:ndcg_at_{k}_bias_{bias_idx}"
+
     latex_code = generator.generate_table(
-        caption=rf"Výsledky NDCG@{k} pro bias {bias_idx} a jednotlivé algoritmy.",
-        label=f"tab:ndcg_at_{k}_bias_{bias_idx}",
+        caption=rf"Výsledky NDCG@{k} pro {cap_bias} a jednotlivé algoritmy.",
+        label=lbl,
         cell_bold_fn=lambda row_idx, col_idx, val: (
             col_idx >= 1 and pd.notna(val) and val == df.iloc[:, col_idx].max(skipna=True)
         ),
@@ -172,10 +196,28 @@ if __name__ == "__main__":
     parser.add_argument("--k", type=int, default=10, help="Top-k values to consider in NDCG@k")
     parser.add_argument("--window-size", type=int, default=10, help="Window size")
     parser.add_argument(
+        "--groups-count",
+        type=int,
+        default=None,
+        help="Match cache segment eval_n_<N> (same as eval --groups-count), e.g. 1000 for paper runs.",
+    )
+    parser.add_argument(
+        "--bias-index",
+        type=int,
+        default=0,
+        help="Index of beta in sorted bias keys (0 = lowest beta, usually 0.0). Ignored if --population-bias is set.",
+    )
+    parser.add_argument(
+        "--population-bias",
+        type=float,
+        default=None,
+        help="Explicit population beta in stored results (e.g. 0, 1, 2). Overrides --bias-index.",
+    )
+    parser.add_argument(
         "--output",
         choices=["latex", "text"],
         default="latex",
-        help="latex = tabulka do thesis; text = čitelná konzolová tabulka.",
+        help="latex: thesis table; text: plain table to stdout.",
     )
     args = parser.parse_args()
 
@@ -183,13 +225,28 @@ if __name__ == "__main__":
     WINDOW_SIZE = args.window_size
     NDCG_KEY = f"ndcg@{NDCG_K}"
 
-    print(f"Printing NDCG@{NDCG_K} window size {WINDOW_SIZE} as {args.output}")
+    if args.population_bias is not None:
+        print(
+            f"Printing NDCG@{NDCG_K} window size {WINDOW_SIZE} "
+            f"population_bias={args.population_bias} as {args.output}"
+        )
+    else:
+        print(
+            f"Printing NDCG@{NDCG_K} window size {WINDOW_SIZE} "
+            f"bias_index={args.bias_index} as {args.output}"
+        )
 
     ndcg_data = load_ndcg_metrics(
-        ALGOS, WINDOW_SIZE, eval_type=EVAL_TYPE, ndcg_key=NDCG_KEY, bias_idx=BIAS_IDX
+        ALGOS,
+        WINDOW_SIZE,
+        eval_type=EVAL_TYPE,
+        ndcg_key=NDCG_KEY,
+        bias_idx=args.bias_index,
+        groups_count=args.groups_count,
+        population_bias=args.population_bias,
     )
     df = build_ndcg_dataframe(ndcg_data, ALGOS, NDCG_K)
     if args.output == "text":
         print(create_ndcg_text_table(df))
     else:
-        print(create_ndcg_latex_table(df, NDCG_K, BIAS_IDX))
+        print(create_ndcg_latex_table(df, NDCG_K, args.bias_index, args.population_bias))

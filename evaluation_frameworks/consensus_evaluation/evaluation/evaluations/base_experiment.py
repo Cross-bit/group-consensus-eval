@@ -14,7 +14,7 @@ import argparse
 import inspect
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Type, TypeVar
+from typing import Any, Dict, List, Literal, Optional, Sequence, Type, TypeVar
 
 C = TypeVar("C", bound="ConsensusExperimentBase")
 
@@ -123,6 +123,50 @@ def pick_bias_result_for_table(bias_to_res: Dict[Any, Any]) -> Any:
         k0 = min(numeric_keys, key=float)
         return bias_to_res[k0]
     return next(iter(bias_to_res.values()))
+
+
+def tune_group_types_present(results: Dict[str, Any], preferred_order: Sequence[str]) -> List[str]:
+    """
+    Pro ``tune_*`` výsledky ``{group_type -> ...}`` vrátí jen ty ``group_type``, které v pickle opravdu jsou.
+
+    Starší / částečné běhy často nemají ``divergent`` / ``variance`` — pak původní ``make_table`` padal na ``KeyError``.
+    """
+    return [str(gt) for gt in preferred_order if gt in results]
+
+
+def rfc_metric_from_picked_stats(picked: Any, *, metric_key: str = "average") -> float:
+    """Vytáhni skalární metriku z bloku po ``pick_bias_result_for_table`` (``average`` nahoře nebo pod ``metrics``)."""
+    import math
+
+    if not isinstance(picked, dict):
+        return float("nan")
+    if metric_key in picked:
+        try:
+            v = float(picked[metric_key])
+            return v if math.isfinite(v) else float("nan")
+        except (TypeError, ValueError):
+            pass
+    metrics = picked.get("metrics")
+    if isinstance(metrics, dict) and metric_key in metrics:
+        try:
+            v = float(metrics[metric_key])
+            return v if math.isfinite(v) else float("nan")
+        except (TypeError, ValueError):
+            pass
+    return float("nan")
+
+
+def rfc_average_from_tune_result_cell(res_cell: Any) -> float:
+    """
+    Jedna buňka z ``tune_*`` tabulky: ``Runner.run`` → ``{bias -> stats}`` → RFC ``average``.
+    """
+    if res_cell is None or not isinstance(res_cell, dict) or not res_cell:
+        return float("nan")
+    try:
+        picked = pick_bias_result_for_table(res_cell)
+    except KeyError:
+        return float("nan")
+    return rfc_metric_from_picked_stats(picked, metric_key="average")
 
 
 def latex_rfc_table_group_types_by_biases(

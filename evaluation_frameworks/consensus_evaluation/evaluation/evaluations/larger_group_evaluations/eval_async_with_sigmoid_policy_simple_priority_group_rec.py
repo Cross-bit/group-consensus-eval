@@ -1,10 +1,3 @@
-"""
-**Large-group eval — async sigmoid + group EASer lists.**
-
-Same mediator recipe as the non-large ``eval_async_*_group_rec`` entrypoints but parameterized for
-bigger ``--group-size`` via ``RunnerLargeGroups``.
-"""
-
 import gc
 from typing import Any, Dict, List, Literal
 
@@ -13,7 +6,7 @@ from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.base_expe
     latex_rfc_table_group_types_by_biases,
 )
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.config import autorun
-from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender_engine import RecommendationEngineGroupAllIndividualEaser
+from evaluation_frameworks.consensus_evaluation.consensus_algorithm.recommender import RecommendationEngineGroupAllIndividualEaser
 from evaluation_frameworks.consensus_evaluation.consensus_algorithm.redistribution_unit import RedistributionUnit, SimplePriorityFunction
 from evaluation_frameworks.consensus_evaluation.consensus_mediator import ConsensusMediatorAsyncApproach, ThresholdPolicySigmoid
 from evaluation_frameworks.consensus_evaluation.evaluation.evaluations.evaluators.consensus_mediator_factories import (
@@ -32,9 +25,12 @@ class EvalLargeAsyncWithSigmoidPolicySimplePriorityGroupRec(ConsensusExperimentB
     DEFAULT_GROUP_TYPES: List[str] = ["random"]
     DEFAULT_POPULATION_BIASES = [0]
     DEFAULT_NDCG_KS = [5, 10, 20, 50, 100]
+    # Core nemá samostatný eval_async sigmoid group; stejné prahy jako u individual (core).
     DEFAULT_SIGMOID_PARAMS = {
-        10: dict(center=1, steepness=0.75, c_init=0.4, max_fill=1, min_fill=0),
-        5: dict(center=1, steepness=0.2, c_init=0.4, max_fill=1, min_fill=0),
+        10: dict(center=1, steepness=0.75, c_init=0.2, max_fill=1, min_fill=0),
+        5: dict(center=2, steepness=0.75, c_init=0.2, max_fill=1, min_fill=0),
+        3: dict(center=1, steepness=0.2, c_init=0.2, max_fill=3, min_fill=0),
+        1: dict(center=1, steepness=0.2, c_init=0.4, max_fill=1, min_fill=0),
     }
 
     def __init__(
