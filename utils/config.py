@@ -2,14 +2,18 @@ from pathlib import Path
 import os
 import pickle
 
-def find_project_root(marker="img") -> Path:
+
+def find_project_root(markers=("docs", "img")) -> Path:
     current = Path(__file__).resolve()
     for parent in current.parents:
-        if (parent / marker).exists():
-            return parent
-    raise RuntimeError(f"Project root not found (no {marker}/ folder above {__file__})")
+        for marker in markers:
+            if (parent / marker).exists():
+                return parent
+    joined = ", ".join(markers)
+    raise RuntimeError(f"Project root not found (no {joined}/ folder above {__file__})")
 
-THESIS_PROJECT_ROOT = find_project_root("img") # first directory that contains the img dir
+
+THESIS_PROJECT_ROOT = find_project_root()  # first directory that contains docs/ or img/
 # If we're already in the analysis repo, avoid appending /analysis again.
 ANALYSIS_PROJECT_ROOT = (
     THESIS_PROJECT_ROOT
@@ -17,7 +21,7 @@ ANALYSIS_PROJECT_ROOT = (
     else THESIS_PROJECT_ROOT / "analysis"
 )
 
-IMG_OUTPUT_PATH = THESIS_PROJECT_ROOT / "img"
+IMG_OUTPUT_PATH = THESIS_PROJECT_ROOT / "docs" / "img"
 
 CACHE_FILES_DIR = ANALYSIS_PROJECT_ROOT / "cache"
 

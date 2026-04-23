@@ -51,7 +51,7 @@ def _default_out_path(windows: Sequence[int], output_format: str) -> Path:
         stem = f"rfc_large_group_size_w{windows[0]}"
     else:
         stem = "rfc_large_group_size_all_windows"
-    return _repo_root() / "img" / f"{stem}.{output_format}"
+    return _repo_root() / "docs" / "img" / f"{stem}.{output_format}"
 
 
 def _plot_one_axis(
@@ -193,16 +193,14 @@ def plot_rfc_large_group_size(
         ax1.tick_params(axis="y", labelleft=True)
         ax2.tick_params(axis="y", labelleft=True)
         ax1.legend(
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.17),
+            loc="best",
             fontsize=LEGEND_FONTSIZE,
             ncol=1,
             framealpha=0.92,
             title_fontsize=LEGEND_TITLE_FONTSIZE,
         )
         ax2.legend(
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.17),
+            loc="best",
             fontsize=LEGEND_FONTSIZE,
             ncol=1,
             framealpha=0.92,

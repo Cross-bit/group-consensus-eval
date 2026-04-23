@@ -65,7 +65,7 @@ def _default_out_path(windows: Sequence[int], output_format: str) -> Path:
         stem = f"success_rate_w{windows[0]}_bias"
     else:
         stem = "success_rate_all_windows_bias"
-    return _repo_root() / "img" / f"{stem}.{output_format}"
+    return _repo_root() / "docs" / "img" / f"{stem}.{output_format}"
 
 
 def success_ratios_for_algo(

@@ -30,7 +30,7 @@ DEFAULT_GROUP_TYPES = ["similar", "outlier", "random", "divergent", "variance"]
 
 def _default_img_dir() -> Path:
     repo_root = Path(__file__).resolve().parents[5]
-    return repo_root / "img"
+    return repo_root / "docs" / "img"
 
 
 def _bias_key_to_float(v: Any) -> Any:
@@ -170,12 +170,12 @@ def main() -> None:
     parser.add_argument(
         "--output",
         default=None,
-        help="Optional output file path (.png preferred). If omitted, saves to <repo>/img/.",
+        help="Optional output file path (.png preferred). If omitted, saves to <repo>/docs/img/.",
     )
     parser.add_argument(
         "--img-dir",
         default=None,
-        help="Directory used when --output is omitted (default: <repo>/img).",
+        help="Directory used when --output is omitted (default: <repo>/docs/img).",
     )
     parser.add_argument(
         "--output-stem",
