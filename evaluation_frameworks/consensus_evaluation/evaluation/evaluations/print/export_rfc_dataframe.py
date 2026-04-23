@@ -14,10 +14,27 @@ DEFAULT_ALGO_SLUGS: Dict[str, str] = {
     "eval_async_static_policy_simple_priority_function_group_rec.py": "A0",
     "eval_async_static_policy_simple_priority_function_individual_rec.py": "A1",
     "eval_async_with_sigmoid_policy_simple_priority_individual_rec.py": "A2",
+    "eval_sts_group_dynamic.py": "A3",
     "eval_hybrid_general_rec_individual.py": "H0",
     "eval_hybrid_updatable.py": "H1",
     "eval_sync_without_feedback.py": "S0",
     "eval_sync_with_feedback_ema.py": "S1",
+    # large-group module names mapped to same canonical families
+    "eval_large_hybrid_general_rec_individual.py": "H0",
+    "eval_large_hybrid_group_updatable.py": "H1",
+    "eval_large_sync_without_feedback.py": "S0",
+    "eval_large_sync_with_feedback_ema.py": "S1",
+}
+
+SHORT_NAME_BY_SLUG: Dict[str, str] = {
+    "A0": "Async-Static-Grp",
+    "A1": "Async-Static-Ind",
+    "A2": "Async-Dyn-Ind",
+    "A3": "STS-Dyn",
+    "H0": "Hybrid-Ind",
+    "H1": "Hybrid-Grp-EMA",
+    "S0": "Sync",
+    "S1": "Sync-EMA",
 }
 
 
@@ -44,6 +61,11 @@ def _algo_family(algo_name: str) -> str:
     return "other"
 
 
+def _algo_short_name(algo_name: str) -> str:
+    slug = _algo_slug(algo_name)
+    return SHORT_NAME_BY_SLUG.get(slug, algo_name.replace(".py", ""))
+
+
 def _is_numbered_pickle(path: Path) -> bool:
     if path.suffix.lower() != ".pkl":
         return False
@@ -54,16 +76,11 @@ def _is_numbered_pickle(path: Path) -> bool:
         return False
 
 
-def _parse_path_metadata(pkl_path: Path, cache_root: Path) -> Optional[Dict[str, Any]]:
+def _parse_path_metadata_labeled(parts: Tuple[str, ...], pkl_path: Path) -> Optional[Dict[str, Any]]:
     """
     Expected layout:
       cache/cons_evaluations/w_<W>/[group_<n>/]split_<eval>/[eval_n_<k>/]<algo>.py/<N>.pkl
     """
-    try:
-        rel = pkl_path.relative_to(cache_root)
-    except ValueError:
-        return None
-    parts = rel.parts
     if len(parts) < 4:
         return None
 
@@ -109,10 +126,79 @@ def _parse_path_metadata(pkl_path: Path, cache_root: Path) -> Optional[Dict[str,
         "groups_count": groups_count,
         "algorithm_file": algo_name,
         "algorithm_slug": _algo_slug(algo_name),
+        "algorithm_short_name": _algo_short_name(algo_name),
         "algorithm_family": _algo_family(algo_name),
         "run_num": run_num,
         "cache_path": str(pkl_path),
+        "cache_layout": "labeled",
     }
+
+
+def _parse_path_metadata_legacy(parts: Tuple[str, ...], pkl_path: Path) -> Optional[Dict[str, Any]]:
+    """
+    Legacy layout:
+      cache/cons_evaluations/<W>/[large/<group_size>/]<split>/<algo>.py/<N>.pkl
+    """
+    if len(parts) < 4:
+        return None
+    if parts[0].startswith("w_"):
+        return None
+
+    w_size_raw = parts[0]
+    try:
+        w_size = int(w_size_raw)
+    except ValueError:
+        w_size = w_size_raw
+
+    idx = 1
+    group_size: Optional[int] = None
+    if idx < len(parts) and parts[idx] == "large":
+        if idx + 1 >= len(parts):
+            return None
+        try:
+            group_size = int(parts[idx + 1])
+        except ValueError:
+            group_size = None
+        idx += 2
+
+    if idx >= len(parts):
+        return None
+    eval_type = parts[idx]
+    idx += 1
+    if idx >= len(parts):
+        return None
+    algo_name = parts[idx]
+
+    try:
+        run_num = int(pkl_path.stem)
+    except ValueError:
+        return None
+
+    return {
+        "w_size": w_size,
+        "eval_type": eval_type,
+        "group_size": group_size,
+        "groups_count": None,  # legacy layout has no eval_n_<N> segment
+        "algorithm_file": algo_name,
+        "algorithm_slug": _algo_slug(algo_name),
+        "algorithm_short_name": _algo_short_name(algo_name),
+        "algorithm_family": _algo_family(algo_name),
+        "run_num": run_num,
+        "cache_path": str(pkl_path),
+        "cache_layout": "legacy",
+    }
+
+
+def _parse_path_metadata(pkl_path: Path, cache_root: Path) -> Optional[Dict[str, Any]]:
+    try:
+        rel = pkl_path.relative_to(cache_root)
+    except ValueError:
+        return None
+    parts = rel.parts
+    meta = _parse_path_metadata_labeled(parts, pkl_path)
+    if meta is not None:
+        return meta
+    return _parse_path_metadata_legacy(parts, pkl_path)
 
 
 def _safe_float(v: Any) -> float:
@@ -141,6 +227,26 @@ def _extract_scalar_metrics(stats: Dict[str, Any]) -> Dict[str, float]:
         suffix = key.replace("@", "_")
         out[f"{suffix}_per_user_ndcg_mean_overall"] = _safe_float(val.get("per_user_ndcg_mean_overall"))
         out[f"{suffix}_ndcg_com_mean_overall"] = _safe_float(val.get("ndcg_com_mean_overall"))
+
+    # Success-rate related fields used by RFC-vs-success tradeoff plots.
+    total = _safe_float(stats.get("total_rounds"))
+    matched_obj = stats.get("matched_groups")
+    matched_count = math.nan
+    if isinstance(matched_obj, (list, tuple)):
+        matched_count = float(len(matched_obj))
+    elif isinstance(matched_obj, (int, float)):
+        matched_count = float(matched_obj)
+    elif hasattr(matched_obj, "__len__") and not isinstance(matched_obj, (str, bytes, dict)):
+        try:
+            matched_count = float(len(matched_obj))
+        except Exception:
+            matched_count = math.nan
+    out["total_rounds"] = total
+    out["matched_count"] = matched_count
+    if math.isfinite(total) and total > 0 and math.isfinite(matched_count):
+        out["success_rate"] = matched_count / total
+    else:
+        out["success_rate"] = math.nan
     return out
 
 
@@ -182,7 +288,8 @@ def build_dataframe(cache_root: Path, latest_only: bool) -> pd.DataFrame:
     rows: List[Dict[str, Any]] = []
     for p, meta in parsed:
         try:
-            payload = load_from_pickle(str(p))
+            # Use absolute path so utils.config does not remap relative paths to CACHE_FILES_DIR.
+            payload = load_from_pickle(str(p.resolve()))
         except Exception:
             continue
 
@@ -200,16 +307,21 @@ def build_dataframe(cache_root: Path, latest_only: bool) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     preferred = [
         "algorithm_slug",
+        "algorithm_short_name",
         "algorithm_family",
         "algorithm_file",
         "w_size",
         "eval_type",
         "group_size",
         "groups_count",
+        "cache_layout",
         "run_num",
         "group_type",
         "bias",
         "average",
+        "success_rate",
+        "matched_count",
+        "total_rounds",
         "variance",
         "std_dev",
     ]

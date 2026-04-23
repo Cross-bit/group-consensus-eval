@@ -122,10 +122,12 @@ class TuneSyncWithFeedbackEma(ConsensusExperimentBase):
             column_width=1.5,
         )
         return generator.generate_table(
-            caption=rf"Vyhodnocení metrik RFC pro asynchronní doporučovač se sigmoid policy. "
-            r"Řádky odpovídají kombinacím hyperparametrů $(center, steepness, c\_init, max, min)$ "
-            rf"při okně $w={self.w_size}$.",
-            label="tab:async_sigmoid_threshold_grid",
+            caption=(
+                r"Vyhodnocení metriky RFC pro synchronní algoritmus se zpětnou vazbou (EMA) "
+                r"pro různé agregační strategie a hodnoty parametru $\alpha$. "
+                r"Řádky odpovídají kombinacím (strategie, $\alpha$), výsledky jsou agregovány přes typy skupin."
+            ),
+            label="tab:tune_sync_strategy_with_feedback_mean",
             cell_bold_fn=lambda row_idx, col_idx, val: (
                 col_idx >= 1 and pd.notna(val) and val == df.iloc[:, col_idx].min(skipna=True)
             ),

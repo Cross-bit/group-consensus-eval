@@ -321,6 +321,182 @@ class RecommendationEngineGroupAllIndividualEaserUpdatable(GeneralRecommendation
         return out
 
 
+class RecommendationEngineSTSGroupDynamic(GeneralRecommendationEngineBase):
+    """
+    STSGroup-inspired dynamic engine with:
+    - individual utility profiles updated from vote constraints,
+    - weighted group profile aggregation,
+    - one shared group recommendation slate per round.
+    """
+
+    _EPS = 1e-12
+
+    def __init__(
+        self,
+        users_ids: List[int],
+        model_iterator: RecAlgoIterator,
+        *,
+        beta: float = 0.6,
+        learning_rate: float = 0.05,
+        margin: float = 1e-3,
+        max_constraint_updates: int = 64,
+    ):
+        self.model = model_iterator
+        self.beta = float(beta)
+        self.learning_rate = float(learning_rate)
+        self.margin = float(margin)
+        self.max_constraint_updates = int(max_constraint_updates)
+
+        b_mat = getattr(self.model, "B", None)
+        self._item_embeddings = (
+            np.asarray(b_mat.T, dtype=np.float64)
+            if b_mat is not None
+            else None
+        )
+
+        self.users_ids: List[int] = []
+        self._base_profiles: Dict[int, np.ndarray] = {}
+        self._current_profiles: Dict[int, np.ndarray] = {}
+        self._action_counts: Dict[int, float] = {}
+        self._group_profile: Optional[np.ndarray] = None
+        self._group_sync_slate: Optional[List[int]] = None
+        self._all_recommended_items_set: Set[int] = set()
+        self._all_recommended_item_ids: List[int] = []
+
+        self.reset_iteration(users_ids)
+        super().__init__()
+
+    def _normalize_profile(self, vec: np.ndarray) -> np.ndarray:
+        arr = np.clip(np.asarray(vec, dtype=np.float64), 0.0, None)
+        s = float(arr.sum())
+        if s <= self._EPS:
+            n = max(1, int(arr.shape[0]))
+            return np.full(n, 1.0 / float(n), dtype=np.float64)
+        return arr / s
+
+    def _item_score_for_profile(self, profile: np.ndarray, item_idx: int) -> float:
+        if self._item_embeddings is None:
+            return float(self.model.get_item_scores(profile)[item_idx])
+        return float(np.dot(profile, self._item_embeddings[item_idx]))
+
+    def _compute_weighted_group_profile(self) -> np.ndarray:
+        total = float(sum(self._action_counts.values()))
+        if total <= self._EPS:
+            mat = np.vstack([self._current_profiles[uid] for uid in self.users_ids])
+            return self._normalize_profile(mat.mean(axis=0))
+        acc = None
+        for uid in self.users_ids:
+            alpha = float(self._action_counts.get(uid, 0.0)) / total
+            prof = self._current_profiles[uid]
+            acc = alpha * prof if acc is None else acc + alpha * prof
+        return self._normalize_profile(acc)
+
+    def begin_new_recommendation_round(self) -> None:
+        self._group_sync_slate = None
+
+    def get_all_recommended_items(self) -> Set[int]:
+        return set(self._all_recommended_items_set)
+
+    def reset_iteration(self, users_ids: List[int], exclude_items: Optional[Set[int]] = None, agg_strategy: Optional[str] = 'mean') -> None:
+        self.users_ids = list(users_ids)
+        self._base_profiles = {}
+        self._current_profiles = {}
+        self._action_counts = {}
+        for uid in self.users_ids:
+            p = self._normalize_profile(self.model.get_user_vector(uid))
+            self._base_profiles[uid] = p
+            self._current_profiles[uid] = p.copy()
+            self._action_counts[uid] = 1.0
+        self._group_profile = self._compute_weighted_group_profile()
+        self._group_sync_slate = None
+        self._all_recommended_items_set = set(exclude_items or set())
+        self._all_recommended_item_ids = list(exclude_items or [])
+
+    def get_individual_item_score(self, user_id: int, item_id: int) -> float:
+        item_idx = int(self.model.item_id_to_index(item_id))
+        return self._item_score_for_profile(self._current_profiles[user_id], item_idx)
+
+    def _enforce_pairwise_order(self, profile: np.ndarray, high_ids: List[int], low_ids: List[int]) -> np.ndarray:
+        if not high_ids or not low_ids:
+            return profile
+        p = profile.copy()
+        updates = 0
+        for hi in high_ids:
+            for lo in low_ids:
+                if updates >= self.max_constraint_updates:
+                    return self._normalize_profile(p)
+                if self._item_score_for_profile(p, hi) <= self._item_score_for_profile(p, lo) + self.margin:
+                    if self._item_embeddings is None:
+                        delta = np.zeros_like(p)
+                        delta[hi] += 1.0
+                        delta[lo] -= 1.0
+                    else:
+                        delta = self._item_embeddings[hi] - self._item_embeddings[lo]
+                    p = self._normalize_profile(p + self.learning_rate * delta)
+                    updates += 1
+        return self._normalize_profile(p)
+
+    def _solve_group_conditioned_profile(self, liked: List[int], neutral: List[int], disliked: List[int]) -> np.ndarray:
+        cand = self._group_profile.copy()
+        cand = self._enforce_pairwise_order(cand, liked, neutral)
+        cand = self._enforce_pairwise_order(cand, neutral, disliked)
+        cand = self._enforce_pairwise_order(cand, liked, disliked)
+        return self._normalize_profile(cand)
+
+    def update_model(self, last_votes: Dict[int, List[Vote]]) -> None:
+        if not last_votes:
+            return
+        for uid, votes in last_votes.items():
+            liked: List[int] = []
+            neutral: List[int] = []
+            disliked: List[int] = []
+            for v in votes:
+                idx = int(self.model.item_id_to_index(int(v.id)))
+                val = float(v.value)
+                if val > 0:
+                    liked.append(idx)
+                elif val < 0:
+                    disliked.append(idx)
+                else:
+                    neutral.append(idx)
+            if not liked and not neutral and not disliked:
+                continue
+            self._action_counts[uid] = float(self._action_counts.get(uid, 1.0) + len(votes))
+            inferred = self._solve_group_conditioned_profile(liked, neutral, disliked)
+            old = self._current_profiles[uid]
+            self._current_profiles[uid] = self._normalize_profile(self.beta * old + (1.0 - self.beta) * inferred)
+        self._group_profile = self._compute_weighted_group_profile()
+
+    def _top_items_from_group_profile(self, k: int) -> List[int]:
+        if k <= 0:
+            return []
+        scores = self.model.get_item_scores(self._group_profile)
+        n = len(scores)
+        mask = np.ones(n, dtype=bool)
+        if self._all_recommended_items_set:
+            ex_idx = [self.model.item_id_to_index(iid) for iid in self._all_recommended_items_set]
+            if ex_idx:
+                mask[ex_idx] = False
+        if not mask.any():
+            return []
+        k = min(k, int(mask.sum()))
+        masked = np.full(n, -np.inf, dtype=np.float64)
+        masked[mask] = scores[mask]
+        top_idx = np.argpartition(masked, -k)[-k:]
+        top_idx = top_idx[np.argsort(masked[top_idx])[::-1]]
+        top_items = [int(self.model.index_to_item_id(int(i))) for i in top_idx]
+        for iid in top_items:
+            if iid not in self._all_recommended_items_set:
+                self._all_recommended_items_set.add(iid)
+                self._all_recommended_item_ids.append(iid)
+        return top_items
+
+    def recommend_next_k(self, user_id: int, size: int, lastVotes: List[Vote] = None) -> List[int]:
+        if self._group_sync_slate is None or len(self._group_sync_slate) != size:
+            self._group_sync_slate = self._top_items_from_group_profile(size)
+        return list(self._group_sync_slate)
+
+
 
 ### =============================================================================================================
 

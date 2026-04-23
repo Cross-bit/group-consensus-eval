@@ -26,6 +26,7 @@ ALGOS: List[str] = [
     "eval_async_static_policy_simple_priority_function_group_rec.py",
     "eval_async_static_policy_simple_priority_function_individual_rec.py",
     "eval_async_with_sigmoid_policy_simple_priority_individual_rec.py",
+    "eval_sts_group_dynamic.py",
     #"eval_sync_with_feedback_ema.py",
     "eval_sync_without_feedback.py",
     "eval_sync_with_feedback_ema.py",
@@ -35,6 +36,7 @@ SHORT_NAME_BY_ALGO: Dict[str, str] = {
     "eval_async_static_policy_simple_priority_function_individual_rec.py": "Async-Static-Ind",
     "eval_async_static_policy_simple_priority_function_group_rec.py": "Async-Static-Grp",
     "eval_async_with_sigmoid_policy_simple_priority_individual_rec.py": "Async-Dyn-Ind",
+    "eval_sts_group_dynamic.py": "STS-Dyn",
     "eval_hybrid_general_rec_individual.py": "Hybrid-Ind",
     "eval_hybrid_updatable.py": "Hybrid-Grp-EMA",
     "eval_sync_without_feedback.py": "Sync",
@@ -48,6 +50,7 @@ PAPER_ORDER_SHORT_NAMES: Tuple[str, ...] = (
     "Async-Static-Ind",
     "Async-Static-Grp",
     "Async-Dyn-Ind",
+    "STS-Dyn",
     "Sync",
     "Sync-EMA",
 )

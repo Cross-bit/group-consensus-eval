@@ -93,18 +93,34 @@ def _load_per_algo_group_bias(
     groups_count: int | None,
     group_types: List[str],
     merge_all_pickles: bool,
+    group_size: int | None = None,
 ) -> Dict[str, Dict[float, Tuple[float, float]]]:
     """
     {group_type: {bias: (matched,total)}}
     """
     out: Dict[str, Dict[float, Tuple[float, float]]] = {gt: {} for gt in group_types}
-    data = load_eval_res(
-        algo_name,
-        str(w_size),
-        eval_type,
-        groups_count=groups_count,
-        merge_all_pickles=merge_all_pickles,
-    )
+    # Prefer explicit group_size slice when requested, but fall back to base cache
+    # for modules/runs that do not store per-group-size paths.
+    try:
+        data = load_eval_res(
+            algo_name,
+            str(w_size),
+            eval_type,
+            group_size=group_size,
+            groups_count=groups_count,
+            merge_all_pickles=merge_all_pickles,
+        )
+    except FileNotFoundError:
+        if group_size is None:
+            raise
+        data = load_eval_res(
+            algo_name,
+            str(w_size),
+            eval_type,
+            group_size=None,
+            groups_count=groups_count,
+            merge_all_pickles=merge_all_pickles,
+        )
     if not isinstance(data, dict):
         return out
     for gt in group_types:

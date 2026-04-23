@@ -130,6 +130,28 @@ class MultiplicativePriorityNormalized(PriorityFunction):
         return base
 
 
+class STSGroupIndividualPriority(PriorityFunction):
+    """
+    Priority for redistribution that uses:
+    - dynamic individual score from STS-like engine
+    - multiplied by social signal (positive votes over item)
+    """
+
+    def __init__(self, engine_with_individual_scores):
+        self.engine = engine_with_individual_scores
+
+    def get_priority(self, user_id: int, item_id: int, context: RedistributionContext) -> float:
+        ind_score = float(self.engine.get_individual_item_score(user_id, item_id))
+        votes = float(context.get_item_total_votes(item_id))
+        return ind_score * votes
+
+    def get_metadata(self):
+        base = super().get_metadata()
+        base["engine"] = getattr(self.engine, "__class__", type(self.engine)).__name__
+        base["formula"] = "individual_dynamic_score * positive_votes"
+        return base
+
+
 #class SimplePriorityFunctionWithRandom(SimplePriorityFunction):
 #    def get_priority(self, user_id: int, item_id: int, context: RedistributionContext) -> float:
 #        pass

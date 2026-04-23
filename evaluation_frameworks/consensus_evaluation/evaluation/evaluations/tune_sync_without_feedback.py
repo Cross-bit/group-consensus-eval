@@ -90,6 +90,7 @@ class TuneSyncWithoutFeedback(ConsensusExperimentBase):
             data[gt] = col
         cols = ["Strategy"] + group_cols
         df = pd.DataFrame(data)[cols]
+        df["average"] = df[group_cols].mean(axis=1, skipna=True)
         generator = LaTeXTableGeneratorSIUnitx(
             df,
             column_specs=None,

@@ -44,6 +44,17 @@ SOFT_TAB10_COLORS = [
     "#d992b4",
 ]
 
+# Font sizing aligned with other two-panel publication plots.
+AXIS_LABEL_FONTSIZE = 14
+TICK_LABEL_FONTSIZE = 12
+LEGEND_FONTSIZE = 11.5
+LEGEND_TITLE_FONTSIZE = 12
+PANEL_TITLE_FONTSIZE = 14
+
+# Keep this plot aligned with paper algorithms currently evaluated in cache.
+# STS prototype is intentionally excluded from plotting outputs for now.
+PLOT_ALGOS = [a for a in ALGOS if a != "eval_sts_group_dynamic.py"]
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[5]
@@ -67,14 +78,19 @@ def success_ratios_for_algo(
     merge_all_pickles: bool,
 ) -> List[float]:
     """Stejna agregace jako radky v ``table_success_matches_all_windows`` (soucet pres group types)."""
-    per_gt = _load_per_algo_group_bias(
-        algo_name,
-        w_size,
-        eval_type=eval_type,
-        groups_count=groups_count,
-        group_types=group_types,
-        merge_all_pickles=merge_all_pickles,
-    )
+    try:
+        per_gt = _load_per_algo_group_bias(
+            algo_name,
+            w_size,
+            eval_type=eval_type,
+            groups_count=groups_count,
+            group_types=group_types,
+            merge_all_pickles=merge_all_pickles,
+        )
+    except FileNotFoundError:
+        # Some repos include optional algorithms in ALGOS without computed cache yet.
+        # Keep plotting robust by returning NaNs for missing algorithms.
+        return [float("nan")] * len(biases)
     out: List[float] = []
     for b in biases:
         matched_sum = 0.0
@@ -109,6 +125,7 @@ def _plot_one_axis(
     palette: str,
     use_czech: bool,
     legend_inside: bool = True,
+    precomputed_by_algo: dict[str, list[float]] | None = None,
 ) -> None:
     ordered = order_algo_modules_paper(list(algos))
     x = np.asarray(biases, dtype=float)
@@ -116,15 +133,18 @@ def _plot_one_axis(
     cmap = plt.get_cmap(palette_kind) if palette_kind != "custom_soft" else None
 
     for i, algo_name in enumerate(ordered):
-        ys = success_ratios_for_algo(
-            algo_name,
-            window_size,
-            biases,
-            group_types,
-            eval_type,
-            groups_count,
-            merge_all_pickles,
-        )
+        if precomputed_by_algo is not None:
+            ys = precomputed_by_algo.get(algo_name, [float("nan")] * len(biases))
+        else:
+            ys = success_ratios_for_algo(
+                algo_name,
+                window_size,
+                biases,
+                group_types,
+                eval_type,
+                groups_count,
+                merge_all_pickles,
+            )
         y = np.asarray(ys, dtype=float)
         label = short_name_from_algo(algo_name)
         color = (
@@ -135,18 +155,25 @@ def _plot_one_axis(
         ax.plot(x, y, "-o", color=color, linewidth=2.0, markersize=8, label=label, zorder=2)
 
     if use_czech:
-        ax.set_xlabel(r"Bias populace $\beta$")
-        ax.set_ylabel("Úspěšnost shody (0–1)")
+        ax.set_xlabel(r"Bias populace $\beta$", fontsize=AXIS_LABEL_FONTSIZE)
+        ax.set_ylabel("Úspěšnost shody (0–1)", fontsize=AXIS_LABEL_FONTSIZE)
     else:
-        ax.set_xlabel(r"Population bias $\beta$")
-        ax.set_ylabel("Success ratio")
+        ax.set_xlabel(r"Population bias $\beta$", fontsize=AXIS_LABEL_FONTSIZE)
+        ax.set_ylabel("Success ratio", fontsize=AXIS_LABEL_FONTSIZE)
     ax.set_ylim(-0.02, 1.02)
     ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+    ax.tick_params(axis="both", labelsize=TICK_LABEL_FONTSIZE)
     ax.grid(True, linestyle="--", alpha=0.35, zorder=1)
     if len(biases) <= 5:
         ax.set_xticks(list(biases))
     if legend_inside:
-        ax.legend(loc="best", fontsize=8, ncol=2, framealpha=0.92)
+        ax.legend(
+            loc="best",
+            fontsize=LEGEND_FONTSIZE,
+            ncol=2,
+            framealpha=0.92,
+            title_fontsize=LEGEND_TITLE_FONTSIZE,
+        )
 
 
 def plot_success_rate_curves(
@@ -165,9 +192,69 @@ def plot_success_rate_curves(
     palette: str = "tab10",
     layout: str = "row",
     use_czech: bool = True,
+    comparison_mode: str = "normal",
 ) -> None:
     # Keep original look for single-window plot; for many windows create side-by-side panels.
-    if len(windows) == 1:
+    windows_int = [int(w) for w in windows]
+    if comparison_mode == "w1_vs_avg_rest":
+        if 1 not in windows_int:
+            raise ValueError("comparison_mode=w1_vs_avg_rest requires W=1 in --windows.")
+        rest_ws = [w for w in windows_int if w != 1]
+        if not rest_ws:
+            raise ValueError("comparison_mode=w1_vs_avg_rest requires at least one non-1 window.")
+
+        ordered = order_algo_modules_paper(list(algos))
+        w1_values: dict[str, list[float]] = {}
+        avg_rest_values: dict[str, list[float]] = {}
+        for algo_name in ordered:
+            w1_values[algo_name] = success_ratios_for_algo(
+                algo_name, 1, biases, group_types, eval_type, groups_count, merge_all_pickles
+            )
+            stacked = []
+            for w in rest_ws:
+                stacked.append(
+                    success_ratios_for_algo(
+                        algo_name, w, biases, group_types, eval_type, groups_count, merge_all_pickles
+                    )
+                )
+            arr = np.asarray(stacked, dtype=float)
+            avg_rest_values[algo_name] = (
+                np.nanmean(arr, axis=0).tolist() if np.isfinite(arr).any() else [float("nan")] * len(biases)
+            )
+
+        fig, axes = plt.subplots(1, 2, figsize=(10.4, 4.9), layout="constrained", sharey=True)
+        ax1, ax2 = axes
+        _plot_one_axis(
+            ax=ax1,
+            window_size=1,
+            biases=biases,
+            group_types=group_types,
+            eval_type=eval_type,
+            groups_count=groups_count,
+            merge_all_pickles=merge_all_pickles,
+            algos=algos,
+            palette=palette,
+            use_czech=use_czech,
+            legend_inside=True,
+            precomputed_by_algo=w1_values,
+        )
+        _plot_one_axis(
+            ax=ax2,
+            window_size=rest_ws[0],
+            biases=biases,
+            group_types=group_types,
+            eval_type=eval_type,
+            groups_count=groups_count,
+            merge_all_pickles=merge_all_pickles,
+            algos=algos,
+            palette=palette,
+            use_czech=use_czech,
+            legend_inside=True,
+            precomputed_by_algo=avg_rest_values,
+        )
+        ax1.set_title(r"$\omega$=1", fontsize=PANEL_TITLE_FONTSIZE)
+        ax2.set_title(rf"AVG($\omega$={','.join(str(w) for w in rest_ws)})", fontsize=PANEL_TITLE_FONTSIZE)
+    elif len(windows) == 1:
         window_size = int(windows[0])
         fig, ax = plt.subplots(figsize=(8.0, 5.0), layout="constrained")
         _plot_one_axis(
@@ -189,11 +276,10 @@ def plot_success_rate_curves(
             tit = (
                 (f"Úspěšnost shody vs. bias (agregace: {', '.join(group_types)}; " if use_czech else
                  f"Success rate vs bias (aggregated: {', '.join(group_types)}; ")
-                + f"W={window_size}; groups_count={gc})"
+                + rf"$\omega$={window_size}; groups_count={gc})"
             )
         ax.set_title(tit, fontsize=11)
     else:
-        windows_int = [int(w) for w in windows]
         n = len(windows_int)
         if layout == "grid2":
             rows = 2
@@ -232,7 +318,7 @@ def plot_success_rate_curves(
                 use_czech=use_czech,
                 legend_inside=True,  # keep legend in each panel for now
             )
-            ax.set_title(f"W={w}", fontsize=11)
+            ax.set_title(rf"$\omega$={w}", fontsize=11)
         for ax in axes_flat[len(windows_int):]:
             ax.axis("off")
 
@@ -317,6 +403,12 @@ def main() -> None:
         help="Multi-window arrangement: row (1xN) or grid2 (2xceil(N/2)).",
     )
     p.add_argument(
+        "--comparison-mode",
+        choices=["normal", "w1_vs_avg_rest"],
+        default="normal",
+        help="normal: one panel per W. w1_vs_avg_rest: two panels (W=1 and average over remaining W).",
+    )
+    p.add_argument(
         "--english",
         action="store_true",
         help="Axis labels, legend and default title in English (default is Czech).",
@@ -342,7 +434,7 @@ def main() -> None:
         eval_type=args.eval_type,
         groups_count=args.groups_count,
         merge_all_pickles=not args.latest_pickle_only,
-        algos=ALGOS,
+        algos=PLOT_ALGOS,
         title=args.title,
         output=out,
         show=args.show,
@@ -350,6 +442,7 @@ def main() -> None:
         palette=args.palette,
         layout=args.layout,
         use_czech=not args.english,
+        comparison_mode=args.comparison_mode,
     )
     print(f"Saved {out}")
 

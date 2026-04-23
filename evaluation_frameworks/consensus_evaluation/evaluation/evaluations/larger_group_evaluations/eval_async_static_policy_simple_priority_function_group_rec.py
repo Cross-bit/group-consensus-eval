@@ -31,7 +31,8 @@ class EvalLargeAsyncStaticPolicySimplePriorityFunctionGroupRec(ConsensusExperime
         10: dict(t_value=9),
         5: dict(t_value=2),
         3: dict(t_value=1),
-        1: dict(t_value=3),
+        # For W=1, static redistribution is binary in practice: 0=off, 1=on.
+        1: dict(t_value=1),
     }
 
     def __init__(

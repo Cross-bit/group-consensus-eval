@@ -1,3 +1,4 @@
+import os
 from collections import defaultdict
 from typing import Any, DefaultDict, Dict, List, Set, Tuple
 from lightfm import LightFM
@@ -63,7 +64,22 @@ def print_csr_stats(csr_matrix, name="Matrix"):
     print()
 
 def load_filtered_dataset(min_user_interactions, min_item_interactions, rating_threshold):
-    data_loader = MovieLensDatasetLoader("ml-32m")
+    preferred_dataset = "ml-32m"
+    fallback_dataset = "ml-1m"
+
+    preferred_root = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "dataset", preferred_dataset)
+    preferred_movies = os.path.join(preferred_root, "movies.csv")
+    preferred_ratings = os.path.join(preferred_root, "ratings.csv")
+
+    dataset_name = preferred_dataset
+    if not (os.path.exists(preferred_movies) and os.path.exists(preferred_ratings)):
+        dataset_name = fallback_dataset
+        print(
+            f"⚠️ Dataset '{preferred_dataset}' is incomplete (missing movies.csv/ratings.csv). "
+            f"Falling back to '{fallback_dataset}'."
+        )
+
+    data_loader = MovieLensDatasetLoader(dataset_name)
     movies_data_df, ratings_csr, user_id_map, movie_id_map = data_loader.load_sparse_ratings(LOAD_SPARSE_MATRIX)
 
     print("📊 Filtering original dataset... ")

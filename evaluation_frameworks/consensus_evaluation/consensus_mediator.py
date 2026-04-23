@@ -214,7 +214,11 @@ class ConsensusMediatorAsyncApproach(ConsensusMediatorBase):
 
             # 2. Threshold t: how many slots come from redistribution (bounded by queue size).
             redistribution_queue_size = self.redistribution_unit.get_user_redistribution_queue_size(user_id)
-            redistributed_part_size = min(self.threshold_policy.get_parameter_value(self.current_round, user_id), redistribution_queue_size)
+            redistributed_part_size = min(
+                self.threshold_policy.get_parameter_value(self.current_round, user_id),
+                redistribution_queue_size,
+                self.window_size,  # never exceed W slots per round
+            )
             redistributed_part_size = int(round(float(redistributed_part_size)))
             new_recommendation_size = self.window_size - redistributed_part_size
 
@@ -253,6 +257,21 @@ class ConsensusMediatorAsyncApproach(ConsensusMediatorBase):
                 matched_items.append(item_id)
 
         return matched_items
+
+
+class ConsensusMediatorSTSGroupDynamic(ConsensusMediatorAsyncApproach):
+    """
+    STSGroup-style mediator variant.
+
+    Behaviour is async redistribution with threshold policy, but it explicitly
+    updates a dynamic STS group engine (if present) from previous votes.
+    """
+
+    def get_next_round_recommendation(self, previous_round_votes: Dict[int, List[Vote]]) -> Dict[int, List[int]]:
+        updater = getattr(self.general_recommender, "update_model", None)
+        if callable(updater) and previous_round_votes:
+            updater(previous_round_votes)
+        return super().get_next_round_recommendation(previous_round_votes)
 
 
 class ConsensusMediatorSyncApproach(ConsensusMediatorBase):
@@ -396,6 +415,7 @@ class ConsensusMediatorHybridApproach(ConsensusMediatorBase):
             redistributed_part_size = min(
                 self.threshold_policy.get_parameter_value(self._async_policy_round, user_id),
                 redistribution_queue_size,
+                self.window_size,  # keep round output bounded by W
             )
             redistributed_part_size = int(round(float(redistributed_part_size)))
             new_recommendation_size = self.window_size - redistributed_part_size
@@ -537,6 +557,7 @@ class ConsensusMediatorHybridApproachWithFeedback(ConsensusMediatorBase):
             redistributed_part_size = min(
                 self.threshold_policy.get_parameter_value(self._async_policy_round, user_id),
                 redistribution_queue_size,
+                self.window_size,  # keep round output bounded by W
             )
             redistributed_part_size = int(round(float(redistributed_part_size)))
             new_recommendation_size = self.window_size - redistributed_part_size
