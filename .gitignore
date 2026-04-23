@@ -16,6 +16,9 @@ __pycache__/
 *.tmp
 
 # MovieLens raw/derived local data (must be downloaded locally)
+dataset/ml-1m/*.dat
+dataset/ml-1m/*.csv
+dataset/ml-32m/*.csv
 dataset/ml-32m/ratings.csv
 dataset/ml-32m/movies.csv
 dataset/ml-32m/tags.csv
